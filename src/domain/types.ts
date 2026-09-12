@@ -36,3 +36,19 @@ export interface SavedPosition {
   readonly pieceDataName: string;
   readonly chordIndex: number;
 }
+
+/** Enough about a piece to list/pick it in a menu — no chord data, that's loaded on demand. */
+export interface PieceSummary {
+  readonly dataName: string;
+  readonly displayName: string;
+  readonly displayInfo?: string;
+  readonly colorTheme: ColorTheme;
+}
+
+/** A composer's grouping of pieces, as shown in the main menu (mirrors touchpianist's "packs"). */
+export interface ComposerPack {
+  readonly composer: string;
+  readonly composerDisplay: string;
+  readonly packDisplay: string;
+  readonly pieces: readonly PieceSummary[];
+}
