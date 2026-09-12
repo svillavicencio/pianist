@@ -42,11 +42,20 @@ describe('contentCatalog', () => {
     });
   });
 
-  it('groups pieces into a traditional pack, a beethoven pack, and a rachmaninoff pack', () => {
-    expect(contentCatalog.packs).toHaveLength(3);
+  it('finds the liszt la campanella piece summary by dataName', () => {
+    expect(contentCatalog.findPiece('liszt_la_campanella')).toEqual({
+      dataName: 'liszt_la_campanella',
+      displayName: 'La Campanella (Grandes études de Paganini, S.141 No. 3)',
+      colorTheme: 'silver',
+    });
+  });
+
+  it('groups pieces into a traditional pack, a beethoven pack, a rachmaninoff pack, and a liszt pack', () => {
+    expect(contentCatalog.packs).toHaveLength(4);
     expect(contentCatalog.packs[0]?.pieces).toHaveLength(2);
     expect(contentCatalog.packs[1]?.pieces).toHaveLength(2);
     expect(contentCatalog.packs[2]?.pieces).toHaveLength(1);
+    expect(contentCatalog.packs[3]?.pieces).toHaveLength(1);
   });
 });
 
@@ -81,5 +90,11 @@ describe('contentPieces', () => {
     expect(piece).toBeDefined();
     expect(piece?.chords).toHaveLength(550);
     expect(piece?.chords[0]?.notes.length).toBeGreaterThan(1);
+  });
+
+  it('has the full liszt la campanella piece with 2329 chords', () => {
+    const piece = contentPieces.get('liszt_la_campanella');
+    expect(piece).toBeDefined();
+    expect(piece?.chords).toHaveLength(2329);
   });
 });

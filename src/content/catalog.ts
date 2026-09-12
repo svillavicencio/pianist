@@ -5,6 +5,7 @@ import { maryHadALittleLambPiece } from './pieces/maryHadALittleLamb';
 import { odeToJoyPiece } from './pieces/odeToJoy';
 import { moonlightSonataPiece } from './pieces/moonlightSonata';
 import { rachmaninoffPreludeOp3No2Piece } from './pieces/rachmaninoffPreludeOp3No2';
+import { lisztLaCampanellaPiece } from './pieces/lisztLaCampanella';
 
 /** Browsable menu of every shipped piece, grouped by composer pack. */
 export const contentCatalog = new PieceCatalog([
@@ -54,6 +55,18 @@ export const contentCatalog = new PieceCatalog([
       },
     ],
   },
+  {
+    composer: 'liszt',
+    composerDisplay: 'Franz Liszt',
+    packDisplay: 'Virtuoso Etudes',
+    pieces: [
+      {
+        dataName: lisztLaCampanellaPiece.dataName,
+        displayName: lisztLaCampanellaPiece.displayName,
+        colorTheme: lisztLaCampanellaPiece.colorTheme,
+      },
+    ],
+  },
 ]);
 
 /** Full `Piece` data for every piece the catalog references, keyed by dataName — the composition root loads chord data from here (a real app would fetch these lazily; for now everything is bundled). */
@@ -63,4 +76,5 @@ export const contentPieces: ReadonlyMap<string, Piece> = new Map([
   [odeToJoyPiece.dataName, odeToJoyPiece],
   [moonlightSonataPiece.dataName, moonlightSonataPiece],
   [rachmaninoffPreludeOp3No2Piece.dataName, rachmaninoffPreludeOp3No2Piece],
+  [lisztLaCampanellaPiece.dataName, lisztLaCampanellaPiece],
 ]);
