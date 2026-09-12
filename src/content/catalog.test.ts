@@ -29,7 +29,7 @@ describe('contentCatalog', () => {
   it('finds the moonlight sonata piece summary by dataName', () => {
     expect(contentCatalog.findPiece('beethoven_moonlight_sonata')).toEqual({
       dataName: 'beethoven_moonlight_sonata',
-      displayName: 'Moonlight Sonata (Opening)',
+      displayName: 'Moonlight Sonata (Complete 1st Movement)',
       colorTheme: 'parliament',
     });
   });
@@ -60,10 +60,10 @@ describe('contentPieces', () => {
     expect(piece?.chords).toHaveLength(30);
   });
 
-  it('has the full moonlight sonata piece with 49 chords, including multi-note chords', () => {
+  it('has the full moonlight sonata piece with 821 chords, including multi-note chords', () => {
     const piece = contentPieces.get('beethoven_moonlight_sonata');
     expect(piece).toBeDefined();
-    expect(piece?.chords).toHaveLength(49);
+    expect(piece?.chords).toHaveLength(821);
     expect(piece?.chords[0]?.notes.length).toBeGreaterThan(1);
   });
 });
