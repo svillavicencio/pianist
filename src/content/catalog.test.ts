@@ -60,10 +60,10 @@ describe('contentPieces', () => {
     expect(piece?.chords).toHaveLength(30);
   });
 
-  it('has the full moonlight sonata piece with 25 chords, including multi-note chords', () => {
+  it('has the full moonlight sonata piece with 49 chords, including multi-note chords', () => {
     const piece = contentPieces.get('beethoven_moonlight_sonata');
     expect(piece).toBeDefined();
-    expect(piece?.chords).toHaveLength(25);
+    expect(piece?.chords).toHaveLength(49);
     expect(piece?.chords[0]?.notes.length).toBeGreaterThan(1);
   });
 });
