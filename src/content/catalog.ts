@@ -6,6 +6,7 @@ import { odeToJoyPiece } from './pieces/odeToJoy';
 import { moonlightSonataPiece } from './pieces/moonlightSonata';
 import { rachmaninoffPreludeOp3No2Piece } from './pieces/rachmaninoffPreludeOp3No2';
 import { lisztLaCampanellaPiece } from './pieces/lisztLaCampanella';
+import { beethovenPathetiqueMov1Piece } from './pieces/beethovenPathetiqueMov1';
 
 /** Browsable menu of every shipped piece, grouped by composer pack. */
 export const contentCatalog = new PieceCatalog([
@@ -40,6 +41,11 @@ export const contentCatalog = new PieceCatalog([
         dataName: moonlightSonataPiece.dataName,
         displayName: moonlightSonataPiece.displayName,
         colorTheme: moonlightSonataPiece.colorTheme,
+      },
+      {
+        dataName: beethovenPathetiqueMov1Piece.dataName,
+        displayName: beethovenPathetiqueMov1Piece.displayName,
+        colorTheme: beethovenPathetiqueMov1Piece.colorTheme,
       },
     ],
   },
@@ -77,4 +83,5 @@ export const contentPieces: ReadonlyMap<string, Piece> = new Map([
   [moonlightSonataPiece.dataName, moonlightSonataPiece],
   [rachmaninoffPreludeOp3No2Piece.dataName, rachmaninoffPreludeOp3No2Piece],
   [lisztLaCampanellaPiece.dataName, lisztLaCampanellaPiece],
+  [beethovenPathetiqueMov1Piece.dataName, beethovenPathetiqueMov1Piece],
 ]);

@@ -44,6 +44,7 @@ const THEME_COLORS: Readonly<Record<string, number>> = {
   forest: 0x2ecc71,
   midnight: 0x9932cc,
   silver: 0xc0c0c0,
+  crimson: 0xdc143c,
 };
 
 /** Maps a piece's `ColorTheme` to a PIXI-friendly hex color; unknown themes fall back to white, never throw. */

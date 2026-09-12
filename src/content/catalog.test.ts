@@ -50,10 +50,18 @@ describe('contentCatalog', () => {
     });
   });
 
+  it('finds the beethoven pathétique 1st movement piece summary by dataName', () => {
+    expect(contentCatalog.findPiece('beethoven_pathetique_mov1')).toEqual({
+      dataName: 'beethoven_pathetique_mov1',
+      displayName: 'Piano Sonata No. 8 "Pathétique", Op. 13 (1st Movement)',
+      colorTheme: 'crimson',
+    });
+  });
+
   it('groups pieces into a traditional pack, a beethoven pack, a rachmaninoff pack, and a liszt pack', () => {
     expect(contentCatalog.packs).toHaveLength(4);
     expect(contentCatalog.packs[0]?.pieces).toHaveLength(2);
-    expect(contentCatalog.packs[1]?.pieces).toHaveLength(2);
+    expect(contentCatalog.packs[1]?.pieces).toHaveLength(3);
     expect(contentCatalog.packs[2]?.pieces).toHaveLength(1);
     expect(contentCatalog.packs[3]?.pieces).toHaveLength(1);
   });
@@ -96,5 +104,12 @@ describe('contentPieces', () => {
     const piece = contentPieces.get('liszt_la_campanella');
     expect(piece).toBeDefined();
     expect(piece?.chords).toHaveLength(2329);
+  });
+
+  it('has the full beethoven pathétique 1st movement piece with 3075 chords, including multi-note chords', () => {
+    const piece = contentPieces.get('beethoven_pathetique_mov1');
+    expect(piece).toBeDefined();
+    expect(piece?.chords).toHaveLength(3075);
+    expect(piece?.chords[0]?.notes.length).toBeGreaterThan(1);
   });
 });
