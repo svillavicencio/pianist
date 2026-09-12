@@ -76,10 +76,10 @@ describe('contentPieces', () => {
     expect(piece?.chords[0]?.notes.length).toBeGreaterThan(1);
   });
 
-  it('has the full rachmaninoff prelude piece with 544 chords, including multi-note chords', () => {
+  it('has the full rachmaninoff prelude piece with 550 chords, including multi-note chords', () => {
     const piece = contentPieces.get('rachmaninoff_prelude_op3_no2');
     expect(piece).toBeDefined();
-    expect(piece?.chords).toHaveLength(544);
+    expect(piece?.chords).toHaveLength(550);
     expect(piece?.chords[0]?.notes.length).toBeGreaterThan(1);
   });
 });
