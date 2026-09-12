@@ -34,10 +34,19 @@ describe('contentCatalog', () => {
     });
   });
 
-  it('groups pieces into a traditional pack and a beethoven pack', () => {
-    expect(contentCatalog.packs).toHaveLength(2);
+  it('finds the rachmaninoff prelude piece summary by dataName', () => {
+    expect(contentCatalog.findPiece('rachmaninoff_prelude_op3_no2')).toEqual({
+      dataName: 'rachmaninoff_prelude_op3_no2',
+      displayName: 'Prelude in C-sharp minor, Op. 3 No. 2 ("Bells of Moscow")',
+      colorTheme: 'midnight',
+    });
+  });
+
+  it('groups pieces into a traditional pack, a beethoven pack, and a rachmaninoff pack', () => {
+    expect(contentCatalog.packs).toHaveLength(3);
     expect(contentCatalog.packs[0]?.pieces).toHaveLength(2);
     expect(contentCatalog.packs[1]?.pieces).toHaveLength(2);
+    expect(contentCatalog.packs[2]?.pieces).toHaveLength(1);
   });
 });
 
@@ -64,6 +73,13 @@ describe('contentPieces', () => {
     const piece = contentPieces.get('beethoven_moonlight_sonata');
     expect(piece).toBeDefined();
     expect(piece?.chords).toHaveLength(821);
+    expect(piece?.chords[0]?.notes.length).toBeGreaterThan(1);
+  });
+
+  it('has the full rachmaninoff prelude piece with 544 chords, including multi-note chords', () => {
+    const piece = contentPieces.get('rachmaninoff_prelude_op3_no2');
+    expect(piece).toBeDefined();
+    expect(piece?.chords).toHaveLength(544);
     expect(piece?.chords[0]?.notes.length).toBeGreaterThan(1);
   });
 });

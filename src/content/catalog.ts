@@ -4,6 +4,7 @@ import { twinkleTwinklePiece } from './pieces/twinkleTwinkle';
 import { maryHadALittleLambPiece } from './pieces/maryHadALittleLamb';
 import { odeToJoyPiece } from './pieces/odeToJoy';
 import { moonlightSonataPiece } from './pieces/moonlightSonata';
+import { rachmaninoffPreludeOp3No2Piece } from './pieces/rachmaninoffPreludeOp3No2';
 
 /** Browsable menu of every shipped piece, grouped by composer pack. */
 export const contentCatalog = new PieceCatalog([
@@ -41,6 +42,18 @@ export const contentCatalog = new PieceCatalog([
       },
     ],
   },
+  {
+    composer: 'rachmaninoff',
+    composerDisplay: 'Sergei Rachmaninoff',
+    packDisplay: 'Romantic Showpieces',
+    pieces: [
+      {
+        dataName: rachmaninoffPreludeOp3No2Piece.dataName,
+        displayName: rachmaninoffPreludeOp3No2Piece.displayName,
+        colorTheme: rachmaninoffPreludeOp3No2Piece.colorTheme,
+      },
+    ],
+  },
 ]);
 
 /** Full `Piece` data for every piece the catalog references, keyed by dataName — the composition root loads chord data from here (a real app would fetch these lazily; for now everything is bundled). */
@@ -49,4 +62,5 @@ export const contentPieces: ReadonlyMap<string, Piece> = new Map([
   [maryHadALittleLambPiece.dataName, maryHadALittleLambPiece],
   [odeToJoyPiece.dataName, odeToJoyPiece],
   [moonlightSonataPiece.dataName, moonlightSonataPiece],
+  [rachmaninoffPreludeOp3No2Piece.dataName, rachmaninoffPreludeOp3No2Piece],
 ]);

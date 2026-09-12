@@ -42,6 +42,7 @@ const THEME_COLORS: Readonly<Record<string, number>> = {
   ocean: 0x1e90ff,
   sunset: 0xff6347,
   forest: 0x2ecc71,
+  midnight: 0x9932cc,
 };
 
 /** Maps a piece's `ColorTheme` to a PIXI-friendly hex color; unknown themes fall back to white, never throw. */
