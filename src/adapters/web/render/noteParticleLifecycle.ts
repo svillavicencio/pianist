@@ -34,15 +34,21 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /**
- * Eases 0..1 with deceleration — fast at the start, settling gently at the end. Used for the
- * upcoming-note "falling into place" entrance transition (a bounded, self-terminating animation
- * distinct from `particleStateAt`'s linear hit-particle fade — see `PixiRenderer`'s entrance
- * animation for why it must never continue past its own target). `t` is clamped to [0, 1] first,
- * so calling this before the transition starts or after it's long finished is always safe.
+ * Eases 0..1 with a smooth ramp up AND down — slow at the start, fastest through the middle,
+ * gentle again at the end. Used for the upcoming-note "glide to resting position" transition (a
+ * bounded, self-terminating animation distinct from `particleStateAt`'s linear hit-particle fade —
+ * see `PixiRenderer`'s transition frame for why it must never continue past its own target).
+ *
+ * Deliberately ease-*in*-out, not just ease-out: a dot that was sitting still (the common case —
+ * most transitions finish well before the next tap) and then starts a fresh glide the instant a
+ * tap lands needs a velocity of *zero* at that instant, or the motion reads as a sudden jerk right
+ * when the player presses a key. A pure ease-out curve starts at its steepest slope — exactly that
+ * jerk. `t` is clamped to [0, 1] first, so calling this before the transition starts or after it's
+ * long finished is always safe.
  */
-export function easeOutQuad(t: number): number {
+export function easeInOutQuad(t: number): number {
   const clamped = clamp(t, 0, 1);
-  return 1 - (1 - clamped) ** 2;
+  return clamped < 0.5 ? 2 * clamped * clamped : 1 - (-2 * clamped + 2) ** 2 / 2;
 }
 
 /** Radius scale factor at velocity 0 / the highest MIDI velocity (127) — a soft note renders

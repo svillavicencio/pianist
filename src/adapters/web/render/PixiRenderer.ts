@@ -2,7 +2,7 @@ import * as PIXI from 'pixi.js';
 import type { Renderer } from '../../../ports/Renderer';
 import type { ColorTheme, MidiNote, Velocity } from '../../../domain/types';
 import type { UpcomingChordPreview } from '../../../domain/upcomingNotesPreview';
-import { MAX_MIDI, MIN_MIDI, colorForNote, easeOutQuad, particleStateAt, radiusForVelocity, shiftLightness } from './noteParticleLifecycle';
+import { MAX_MIDI, MIN_MIDI, colorForNote, easeInOutQuad, particleStateAt, radiusForVelocity, shiftLightness } from './noteParticleLifecycle';
 import { SPAWN_HEIGHT_FRACTION } from './backdrop';
 
 /** How long (ms) a spawned note visual lives before it's removed; matches PARTICLE lifecycle tuning. */
@@ -274,10 +274,12 @@ export class PixiRenderer implements Renderer {
 
   /** Sets every dot in `tracked` to its current transition frame: eased from `fromY` (at
    *  `elapsedMs === 0`) to exactly `toY` (once `elapsedMs` reaches `durationMs`) — never past it,
-   *  in either direction. */
+   *  in either direction. Ease-*in*-out (not just ease-out): a carried-over chord is usually
+   *  already sitting still when this fires right at the moment of a tap, so the glide must start
+   *  at zero velocity too, or it reads as a sudden jerk instead of a smooth push-off. */
   private applyTransitionFrame(tracked: TrackedUpcomingChord): void {
     const t = tracked.durationMs > 0 ? tracked.elapsedMs / tracked.durationMs : 1;
-    const y = tracked.fromY + (tracked.toY - tracked.fromY) * easeOutQuad(t);
+    const y = tracked.fromY + (tracked.toY - tracked.fromY) * easeInOutQuad(t);
     for (const dot of tracked.dots) dot.y = y;
   }
 }
