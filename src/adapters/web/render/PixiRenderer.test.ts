@@ -22,10 +22,13 @@ class FakeContainer implements NoteVisualContainer {
   }
 }
 
+/** The upcoming-notes tests use a 1000ms lookahead throughout, so a chord's distanceMs doubles as its ratio * 1000. */
+const LOOKAHEAD_MS = 1000;
+
 describe('PixiRenderer', () => {
   it('adds a graphic to the container when a note is spawned', () => {
     const container = new FakeContainer();
-    const renderer = new PixiRenderer(container, 800, 600);
+    const renderer = new PixiRenderer(container, 800, 600, LOOKAHEAD_MS);
 
     renderer.spawnNoteVisual(60, 'parliament');
 
@@ -34,7 +37,7 @@ describe('PixiRenderer', () => {
 
   it('positions spawned notes across the width by their MIDI pitch (21-108 range)', () => {
     const container = new FakeContainer();
-    const renderer = new PixiRenderer(container, 1000, 500);
+    const renderer = new PixiRenderer(container, 1000, 500, LOOKAHEAD_MS);
 
     renderer.spawnNoteVisual(21, 'parliament'); // lowest piano key -> left edge
     renderer.spawnNoteVisual(108, 'parliament'); // highest piano key -> right edge
@@ -45,7 +48,7 @@ describe('PixiRenderer', () => {
 
   it('applies particleStateAt scale/alpha on tick and keeps a mid-lifetime particle alive', () => {
     const container = new FakeContainer();
-    const renderer = new PixiRenderer(container, 800, 600);
+    const renderer = new PixiRenderer(container, 800, 600, LOOKAHEAD_MS);
     renderer.spawnNoteVisual(60, 'parliament');
 
     renderer.tick(400); // half of the 800ms particle lifetime
@@ -58,7 +61,7 @@ describe('PixiRenderer', () => {
 
   it('removes and destroys a particle once its lifetime elapses', () => {
     const container = new FakeContainer();
-    const renderer = new PixiRenderer(container, 800, 600);
+    const renderer = new PixiRenderer(container, 800, 600, LOOKAHEAD_MS);
     renderer.spawnNoteVisual(60, 'parliament');
     const graphic = container.children[0];
     const destroySpy = vi.spyOn(graphic as PIXI.Graphics, 'destroy');
@@ -71,11 +74,294 @@ describe('PixiRenderer', () => {
 
   it('records new dimensions on resize for subsequent positioning', () => {
     const container = new FakeContainer();
-    const renderer = new PixiRenderer(container, 800, 600);
+    const renderer = new PixiRenderer(container, 800, 600, LOOKAHEAD_MS);
 
     renderer.resize(400, 300);
     renderer.spawnNoteVisual(108, 'parliament'); // highest note -> full (new) width
 
     expect(container.children[0]?.x).toBeCloseTo(400);
+  });
+
+  it('draws one dot per upcoming note, positioned by pitch and by distanceMs', () => {
+    const container = new FakeContainer();
+    const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
+
+    renderer.showUpcoming(
+      [
+        { distanceMs: 0, midis: [21] }, // lowest pitch, next up -> near the hit line (bottom)
+        { distanceMs: LOOKAHEAD_MS, midis: [108] }, // highest pitch, furthest out -> near the top
+      ],
+      'parliament',
+      false,
+    );
+
+    expect(container.children).toHaveLength(2);
+    expect(container.children[0]?.x).toBeCloseTo(0);
+    expect(container.children[1]?.x).toBeCloseTo(1000);
+    expect(container.children[0]!.y).toBeGreaterThan(container.children[1]!.y);
+  });
+
+  it('replaces the previous upcoming preview (and destroys its graphics) on each call', () => {
+    const container = new FakeContainer();
+    const renderer = new PixiRenderer(container, 800, 600, LOOKAHEAD_MS);
+
+    renderer.showUpcoming([{ distanceMs: 0, midis: [60] }], 'parliament', false);
+    const firstDot = container.children[0] as PIXI.Graphics;
+    const destroySpy = vi.spyOn(firstDot, 'destroy');
+
+    renderer.showUpcoming(
+      [
+        { distanceMs: 200, midis: [64] },
+        { distanceMs: 400, midis: [67] },
+      ],
+      'parliament',
+      false,
+    );
+
+    expect(destroySpy).toHaveBeenCalledOnce();
+    expect(container.children).toHaveLength(2);
+  });
+
+  it('does not affect already-spawned hit particles', () => {
+    const container = new FakeContainer();
+    const renderer = new PixiRenderer(container, 800, 600, LOOKAHEAD_MS);
+
+    renderer.spawnNoteVisual(60, 'parliament');
+    renderer.showUpcoming([{ distanceMs: 0, midis: [64] }], 'parliament', false);
+    renderer.showUpcoming([], 'parliament', false); // clearing the preview must not touch the hit particle
+
+    expect(container.children).toHaveLength(1);
+  });
+
+  it('draws a multi-note chord as same-colored dots joined by a connecting line', () => {
+    const container = new FakeContainer();
+    const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
+
+    renderer.showUpcoming([{ distanceMs: 0, midis: [60, 67] }], 'parliament', false);
+
+    // 1 connecting line + 2 dots for the chord.
+    expect(container.children).toHaveLength(3);
+  });
+
+  it('does not draw a connecting line for a single-note chord', () => {
+    const container = new FakeContainer();
+    const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
+
+    renderer.showUpcoming([{ distanceMs: 0, midis: [60] }], 'parliament', false);
+
+    expect(container.children).toHaveLength(1);
+  });
+
+  it('alternates shade between consecutive chords, so separate taps read apart from one another', () => {
+    const container = new FakeContainer();
+    const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
+    const fillSpy = vi.spyOn(PIXI.Graphics.prototype, 'fill');
+
+    renderer.showUpcoming(
+      [
+        { distanceMs: 0, midis: [60] },
+        { distanceMs: 300, midis: [62] },
+        { distanceMs: 600, midis: [64] },
+      ],
+      'parliament',
+      false,
+    );
+
+    const colors = fillSpy.mock.calls.map((call) => call[0]);
+    expect(colors).toHaveLength(3);
+    expect(colors[0]).toBe(colors[2]); // 1st and 3rd chord share the base shade
+    expect(colors[1]).not.toBe(colors[0]); // the chord in between uses the alternate shade
+
+    fillSpy.mockRestore();
+  });
+
+  describe('falling animation', () => {
+    it('moves an upcoming dot smoothly toward the hit line as tick() advances real time', () => {
+      const container = new FakeContainer();
+      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
+      renderer.showUpcoming([{ distanceMs: LOOKAHEAD_MS, midis: [60] }], 'parliament', false);
+      const startY = container.children[0]!.y;
+
+      renderer.tick(LOOKAHEAD_MS / 2); // halfway to due
+
+      const midY = container.children[0]!.y;
+      expect(midY).toBeGreaterThan(startY); // fell further down (y grows downward)
+
+      renderer.tick(LOOKAHEAD_MS / 2); // now exactly due
+
+      const dueY = container.children[0]!.y;
+      expect(dueY).toBeGreaterThan(midY);
+    });
+
+    it('settles a due chord at the hit line and keeps it there rather than overshooting', () => {
+      const container = new FakeContainer();
+      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
+      renderer.showUpcoming([{ distanceMs: 500, midis: [60] }], 'parliament', false);
+
+      renderer.tick(500); // exactly due
+      const atDueY = container.children[0]!.y;
+      renderer.tick(2000); // long past due, e.g. the player hasn't tapped yet
+
+      expect(container.children[0]!.y).toBe(atDueY);
+    });
+
+    it('reuses (rather than recreates) a multi-note chord\'s line and dots across ticks', () => {
+      const container = new FakeContainer();
+      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
+      renderer.showUpcoming([{ distanceMs: LOOKAHEAD_MS, midis: [21, 108] }], 'parliament', false);
+      const graphicsAfterShow = [...container.children];
+
+      renderer.tick(LOOKAHEAD_MS / 2);
+
+      expect(container.children).toHaveLength(graphicsAfterShow.length);
+      container.children.forEach((graphic, index) => expect(graphic).toBe(graphicsAfterShow[index]));
+    });
+
+    it('animates the second chord smoothly, unlike the always-already-due first one', () => {
+      const container = new FakeContainer();
+      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
+      renderer.showUpcoming(
+        [
+          { distanceMs: 0, midis: [60] }, // always "next up" — nothing to animate
+          { distanceMs: 400, midis: [62] },
+        ],
+        'parliament',
+        false,
+      );
+      const secondDotStartY = container.children[1]!.y;
+
+      renderer.tick(200); // halfway to the second chord's due time
+
+      expect(container.children[1]!.y).toBeGreaterThan(secondDotStartY); // fell further (y grows downward)
+    });
+
+    it('lets the second chord finish falling to the hit line, then freezes the whole lane there until the player taps', () => {
+      const container = new FakeContainer();
+      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
+      renderer.showUpcoming(
+        [
+          { distanceMs: 0, midis: [60] },
+          { distanceMs: 400, midis: [62] },
+          { distanceMs: 900, midis: [64] }, // shouldn't get closer than its position at t=400 without input
+        ],
+        'parliament',
+        false,
+      );
+
+      renderer.tick(400); // the second chord is now also due
+      const thirdDotAtFreezeY = container.children[2]!.y;
+
+      renderer.tick(2000); // the player still hasn't tapped — real time keeps passing regardless
+
+      expect(container.children[2]!.y).toBe(thirdDotAtFreezeY); // frozen, the clock stopped advancing past 400ms
+    });
+
+    it('resets the fall clock on a discontinuous jump (seek/restart), snapshotting from the new cursor', () => {
+      const container = new FakeContainer();
+      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
+      renderer.showUpcoming([{ distanceMs: LOOKAHEAD_MS, midis: [60] }], 'parliament', false);
+      renderer.tick(LOOKAHEAD_MS); // that chord is now at the hit line
+
+      // A seek/restart (continuedFromPreviousTap: false): the next chord is snapshotted fresh at
+      // the far edge of the window again, regardless of how much time had elapsed before the jump.
+      renderer.showUpcoming([{ distanceMs: LOOKAHEAD_MS, midis: [62] }], 'parliament', false);
+      const freshY = container.children[0]!.y;
+
+      const hitLineY = 1000 * 0.85;
+      expect(freshY).toBeLessThan(hitLineY - 1);
+    });
+
+    it('keeps the fall flowing across a tap instead of snapping the new next-up chord into place', () => {
+      const container = new FakeContainer();
+      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
+      renderer.showUpcoming(
+        [
+          { distanceMs: 0, midis: [60] },
+          { distanceMs: 400, midis: [62] }, // will become the new "next up" once the player taps
+        ],
+        'parliament',
+        false,
+      );
+
+      renderer.tick(150); // the player taps early, before the second chord has finished falling
+      const yJustBeforeTap = container.children[1]!.y;
+
+      // The tap: cursor advances, [62] becomes the new upcoming[0]. Continuous, so it must not
+      // snap straight to the hit line — it should still read as "150ms into a 400ms fall".
+      renderer.showUpcoming([{ distanceMs: 0, midis: [62] }], 'parliament', true);
+      const yRightAfterTap = container.children[0]!.y;
+
+      expect(yRightAfterTap).toBeCloseTo(yJustBeforeTap);
+    });
+
+    it('lets the newly-promoted chord keep falling normally after a continuous tap', () => {
+      const container = new FakeContainer();
+      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
+      renderer.showUpcoming(
+        [
+          { distanceMs: 0, midis: [60] },
+          { distanceMs: 400, midis: [62] },
+        ],
+        'parliament',
+        false,
+      );
+      renderer.tick(150); // tapped early, at 150 of 400ms
+
+      renderer.showUpcoming([{ distanceMs: 0, midis: [62] }], 'parliament', true);
+      const yRightAfterTap = container.children[0]!.y;
+
+      renderer.tick(250); // the remaining 250ms of its original fall elapse normally
+
+      const hitLineY = 1000 * 0.85;
+      expect(container.children[0]!.y).toBeGreaterThan(yRightAfterTap); // kept falling further
+      expect(container.children[0]!.y).toBeCloseTo(hitLineY); // and arrives right on time
+    });
+
+    it('does not corrupt the next fall after waiting far past the freeze point before finally tapping', () => {
+      const container = new FakeContainer();
+      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
+      renderer.showUpcoming(
+        [
+          { distanceMs: 0, midis: [60] },
+          { distanceMs: 400, midis: [62] },
+        ],
+        'parliament',
+        false,
+      );
+
+      renderer.tick(400); // frozen here
+      renderer.tick(50_000); // the player waits a long time before finally tapping
+
+      // The tap lands: [62] becomes the new upcoming[0], and a fresh chord a full window away
+      // follows it. That fresh chord must render near the top, not snap to the hit line — the
+      // 50 real seconds of waiting must not have corrupted the rebase.
+      renderer.showUpcoming(
+        [
+          { distanceMs: 0, midis: [62] },
+          { distanceMs: LOOKAHEAD_MS, midis: [64] },
+        ],
+        'parliament',
+        true,
+      );
+
+      const hitLineY = 1000 * 0.85;
+      expect(container.children[1]!.y).toBeLessThan(hitLineY - 1);
+    });
+
+    it('hard-resets (does not carry over) continuity when the previous snapshot had no second chord', () => {
+      const container = new FakeContainer();
+      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
+      renderer.showUpcoming([{ distanceMs: 0, midis: [60] }], 'parliament', false); // only one chord left
+      renderer.tick(300);
+
+      // continuedFromPreviousTap: true, but there was no upcoming[1] to rebase from — must not throw
+      // or produce garbage math, just behave like a normal fresh snapshot.
+      expect(() =>
+        renderer.showUpcoming([{ distanceMs: LOOKAHEAD_MS, midis: [64] }], 'parliament', true),
+      ).not.toThrow();
+
+      const hitLineY = 1000 * 0.85;
+      expect(container.children[0]!.y).toBeLessThan(hitLineY - 1); // rendered far, not snapped to the hit line
+    });
   });
 });

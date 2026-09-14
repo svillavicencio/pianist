@@ -28,4 +28,13 @@ describe('FakeRenderer', () => {
 
     expect(renderer.lastResize).toEqual({ width: 1024, height: 768 });
   });
+
+  it('remembers the most recent upcoming-chords preview', () => {
+    const renderer = new FakeRenderer();
+    renderer.showUpcoming([{ distanceMs: 0, midis: [60] }], 'parliament', false);
+    renderer.showUpcoming([{ distanceMs: 500, midis: [64, 67] }], 'parliament', true);
+
+    expect(renderer.lastUpcoming).toEqual([{ distanceMs: 500, midis: [64, 67] }]);
+    expect(renderer.lastUpcomingContinuedFromPreviousTap).toBe(true);
+  });
 });

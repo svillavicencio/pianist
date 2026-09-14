@@ -1,7 +1,8 @@
 import * as PIXI from 'pixi.js';
 import type { Renderer } from '../../../ports/Renderer';
 import type { ColorTheme, MidiNote } from '../../../domain/types';
-import { colorThemeToHex, particleStateAt } from './noteParticleLifecycle';
+import type { UpcomingChordPreview } from '../../../domain/upcomingNotesPreview';
+import { colorThemeToHex, darkenHex, particleStateAt } from './noteParticleLifecycle';
 
 /** Lowest/highest MIDI notes on a standard 88-key piano — used to map a note to a horizontal position. */
 const MIN_MIDI = 21;
@@ -16,11 +17,40 @@ const BASE_RADIUS_PX = 24;
 /** Fraction of the viewport height a spawned particle sits at; near the bottom, like keys on a keyboard. */
 const SPAWN_HEIGHT_FRACTION = 0.85;
 
+/** Radius (px) of an "upcoming note" preview dot — smaller than a hit particle so the two read as distinct. */
+const UPCOMING_RADIUS_PX = 10;
+
+/** Alpha of an "upcoming note" preview dot — dimmer than a hit particle so it reads as "not yet played". */
+const UPCOMING_ALPHA = 0.55;
+
+/** Fraction of the viewport height the preview lane's top edge sits at; dots fall from here down to the hit line. */
+const UPCOMING_TOP_FRACTION = 0.15;
+
+/** How far (0..1, toward black) every other upcoming chord is darkened, so consecutive taps alternate shade. */
+const UPCOMING_ALT_SHADE_AMOUNT = 0.5;
+
+/** Width (px) of the line connecting a multi-note chord's dots — "these notes fire on the same tap". */
+const UPCOMING_CHORD_LINE_WIDTH_PX = 3;
+
 /** One tracked particle: the PIXI display object plus how long it's been alive. */
 interface TrackedParticle {
   readonly graphic: PIXI.Graphics;
   readonly midi: MidiNote;
   elapsedMs: number;
+}
+
+/**
+ * One tracked "upcoming chord" preview: its snapshot distance (ms, taken when `showUpcoming` was
+ * last called) plus the graphics drawn for it, repositioned every `tick()` as real time passes —
+ * this is what makes the dots fall smoothly at the piece's authored pace instead of jumping
+ * between static positions only when the cursor moves.
+ */
+interface TrackedUpcomingChord {
+  readonly distanceMs: number;
+  readonly xs: readonly number[];
+  readonly color: number;
+  readonly dots: readonly PIXI.Graphics[];
+  readonly line: PIXI.Graphics | undefined;
 }
 
 /**
@@ -43,14 +73,21 @@ export interface NoteVisualContainer {
  * (and resizing) the `PIXI.Application`. Because this class only has a container,
  * `resize()` just records the new dimensions for its own positioning math; it does
  * NOT call `app.renderer.resize()` — the caller must do that separately.
+ *
+ * `lookaheadMs` is the same window the caller passed to `upcomingChordsPreview` — it's
+ * needed again here to keep converting each chord's ever-decreasing `distanceMs` into
+ * a 0..1 vertical position as `tick()` advances real time.
  */
 export class PixiRenderer implements Renderer {
   private readonly particles: TrackedParticle[] = [];
+  private upcoming: TrackedUpcomingChord[] = [];
+  private upcomingElapsedMs = 0;
 
   constructor(
     private readonly container: NoteVisualContainer,
     private width: number,
     private height: number,
+    private readonly lookaheadMs: number,
   ) {}
 
   spawnNoteVisual(midi: MidiNote, colorTheme: ColorTheme): void {
@@ -60,6 +97,57 @@ export class PixiRenderer implements Renderer {
     graphic.y = this.height * SPAWN_HEIGHT_FRACTION;
     this.container.addChild(graphic);
     this.particles.push({ graphic, midi, elapsedMs: 0 });
+  }
+
+  showUpcoming(chords: readonly UpcomingChordPreview[], colorTheme: ColorTheme, continuedFromPreviousTap: boolean): void {
+    // Rebase the fall clock instead of resetting it: what's about to become the new `upcoming[0]`
+    // was `upcoming[1]` a moment ago, already falling toward its own due time. Resetting elapsed to
+    // 0 unconditionally would snap it straight to its resting position — a visible jump — instead of
+    // letting it continue from wherever it actually was. `continuedFromPreviousTap` is false for a
+    // genuinely discontinuous jump (seek, restart, or the very first snapshot), where a hard reset
+    // to 0 is exactly right.
+    const previousNextDistanceMs = this.upcoming[1]?.distanceMs;
+
+    for (const tracked of this.upcoming) {
+      for (const dot of tracked.dots) {
+        this.container.removeChild(dot);
+        dot.destroy();
+      }
+      if (tracked.line) {
+        this.container.removeChild(tracked.line);
+        tracked.line.destroy();
+      }
+    }
+
+    const baseColor = colorThemeToHex(colorTheme);
+    const altColor = darkenHex(baseColor, UPCOMING_ALT_SHADE_AMOUNT);
+
+    this.upcomingElapsedMs =
+      continuedFromPreviousTap && previousNextDistanceMs !== undefined
+        ? this.upcomingElapsedMs - previousNextDistanceMs
+        : 0;
+    this.upcoming = chords.map((chord, index) => {
+      // Alternates shade per chord (not per note) — same shade + connecting line reads as "one
+      // chord, press together"; the next chord switching shade reads as "that's a separate tap".
+      const color = index % 2 === 0 ? baseColor : altColor;
+      const xs = chord.midis.map((midi) => this.xForMidi(midi));
+
+      const line = xs.length > 1 ? new PIXI.Graphics() : undefined;
+      if (line) this.container.addChild(line);
+
+      const dots = xs.map((x) => {
+        const dot = new PIXI.Graphics();
+        dot.circle(0, 0, UPCOMING_RADIUS_PX).fill(color);
+        dot.alpha = UPCOMING_ALPHA;
+        dot.x = x;
+        this.container.addChild(dot);
+        return dot;
+      });
+
+      return { distanceMs: chord.distanceMs, xs, color, dots, line };
+    });
+
+    this.positionUpcoming();
   }
 
   tick(deltaMs: number): void {
@@ -76,6 +164,26 @@ export class PixiRenderer implements Renderer {
         this.particles.splice(i, 1);
       }
     }
+
+    // `upcoming[1]` (the chord after the immediate next one) is what the freeze anchors on, not
+    // `upcoming[0]` — that one is always already at `distanceMs === 0` by construction (it's the
+    // next tap's target), so anchoring on it would freeze on the very first frame and kill the
+    // animation outright. This game advances by tap, not by clock, so once `upcoming[1]` finishes
+    // falling to the hit line, further real time must not keep dragging the chords behind it
+    // forward too — the clock freezes there, holding the whole lane in place.
+    //
+    // Clamped HERE, at the source, rather than only where it's read for positioning: if the raw
+    // value kept growing unbounded while frozen, a long wait before the next tap would leave it
+    // holding a huge stale number. `showUpcoming()`'s continuity rebase (see there) subtracts
+    // `upcoming[1]`'s distance from whatever this holds — fed that huge stale number instead of the
+    // true frozen one, it would corrupt the next batch of chords' distances, snapping them straight
+    // to the hit line instead of letting them fall in from the top.
+    const freezeAtMs = this.upcoming[1]?.distanceMs;
+    this.upcomingElapsedMs =
+      freezeAtMs === undefined
+        ? this.upcomingElapsedMs + deltaMs
+        : Math.min(this.upcomingElapsedMs + deltaMs, freezeAtMs);
+    this.positionUpcoming();
   }
 
   resize(width: number, height: number): void {
@@ -88,5 +196,41 @@ export class PixiRenderer implements Renderer {
     const t = (midi - MIN_MIDI) / (MAX_MIDI - MIN_MIDI);
     const clampedT = Math.min(Math.max(t, 0), 1);
     return clampedT * this.width;
+  }
+
+  /** Maps a 0..1 "how far out" ratio to a y coordinate: it falls from near the top down to the hit line. */
+  private yForDistance(distance: number): number {
+    const hitLineY = this.height * SPAWN_HEIGHT_FRACTION;
+    const topY = this.height * UPCOMING_TOP_FRACTION;
+    const clampedDistance = Math.min(Math.max(distance, 0), 1);
+    return hitLineY - clampedDistance * (hitLineY - topY);
+  }
+
+  /**
+   * Repositions every tracked upcoming chord from its snapshot `distanceMs` minus how much real
+   * time has elapsed since that snapshot (`upcomingElapsedMs`, already frozen by `tick()` once it
+   * hits the lane's freeze point — see there) — this is the smooth fall: a chord due in 2000ms
+   * visibly glides down over the next 2 real seconds, landing on the hit line exactly when it's due.
+   *
+   * `upcoming[0]` is always the chord the *next* tap will fire, so it's always already at
+   * `distanceMs === 0` — pinned at the hit line, nothing to animate there. `upcoming[1]` is the one
+   * after that: the interesting one, since it's what the falling motion is actually illustrating
+   * ("this is how long you'd wait before the tap after next").
+   */
+  private positionUpcoming(): void {
+    for (const tracked of this.upcoming) {
+      const remainingMs = tracked.distanceMs - this.upcomingElapsedMs;
+      const y = this.yForDistance(this.lookaheadMs > 0 ? remainingMs / this.lookaheadMs : 0);
+
+      for (const dot of tracked.dots) dot.y = y;
+
+      if (tracked.line) {
+        tracked.line.clear();
+        tracked.line
+          .moveTo(Math.min(...tracked.xs), y)
+          .lineTo(Math.max(...tracked.xs), y)
+          .stroke({ width: UPCOMING_CHORD_LINE_WIDTH_PX, color: tracked.color, alpha: UPCOMING_ALPHA });
+      }
+    }
   }
 }

@@ -51,3 +51,19 @@ const THEME_COLORS: Readonly<Record<string, number>> = {
 export function colorThemeToHex(theme: ColorTheme): number {
   return THEME_COLORS[theme] ?? DEFAULT_COLOR_HEX;
 }
+
+/**
+ * Mixes `hex` toward black by `amount` (0 = unchanged, 1 = pure black) — used to derive a second,
+ * visually-distinct shade of a piece's color for alternating consecutive chords in the upcoming-notes
+ * preview, so "these notes are one chord" and "that's a different, separate chord" read apart at a
+ * glance. A luminosity shift (rather than a hue shift) reads reliably even for a near-grayscale theme
+ * like `silver`, where rotating hue would do nothing.
+ */
+export function darkenHex(hex: number, amount: number): number {
+  const clampedAmount = Math.min(Math.max(amount, 0), 1);
+  const r = (hex >> 16) & 0xff;
+  const g = (hex >> 8) & 0xff;
+  const b = hex & 0xff;
+  const darken = (channel: number): number => Math.round(channel * (1 - clampedAmount));
+  return (darken(r) << 16) | (darken(g) << 8) | darken(b);
+}
