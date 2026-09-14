@@ -34,14 +34,18 @@ const CLUSTER_JITTER_STEP_PX = 8;
 /** Bounds (ms) for the "falling into place" entrance transition an upcoming dot plays once, right
  *  when it (re)appears — bounded and self-terminating, unlike the old continuous real-time fall.
  *  Its duration is drawn from the chord's own gap since the previous one in the passage (clamped
- *  to these bounds), so a fast trill settles almost instantly while a slow passage eases in more
- *  visibly — the transition reads as "how the piece should be played" without ever letting a
- *  waiting player see a note creep toward the hit line: once elapsed reaches the duration, the
- *  dot is pinned at its resting position and `tick()` stops touching it. */
+ *  to these bounds), so a fast trill settles almost instantly while a genuinely slow passage (a
+ *  held whole note, a fermata) eases in visibly over most of a second — the transition reads as
+ *  "how the piece should be played," graded by how slow the piece actually is, without ever
+ *  letting a waiting player see a note creep toward the hit line: once elapsed reaches the
+ *  duration, the dot is pinned at its resting position and `tick()` stops touching it. */
 const ENTRANCE_MIN_MS = 80;
-const ENTRANCE_MAX_MS = 320;
-/** How far (px) above its resting position a dot starts its entrance, easing down into place. */
-const ENTRANCE_RISE_PX = 26;
+const ENTRANCE_MAX_MS = 900;
+/** Bounds (px) for how far above its resting position a dot starts its entrance — scaled by the
+ *  same fast/slow gap the duration uses, so a slow entrance isn't just longer but visibly travels
+ *  further too (a real glide), while a fast one stays a small, snappy nudge. */
+const ENTRANCE_MIN_RISE_PX = 18;
+const ENTRANCE_MAX_RISE_PX = 110;
 
 /** One tracked particle: the PIXI display object plus how long it's been alive. */
 interface TrackedParticle {
@@ -64,6 +68,7 @@ interface TrackedUpcomingChord {
   readonly dots: readonly PIXI.Graphics[];
   readonly restY: number;
   readonly entranceDurationMs: number;
+  readonly entranceRisePx: number;
   entranceElapsedMs: number;
 }
 
@@ -151,6 +156,11 @@ export class PixiRenderer implements Renderer {
         ENTRANCE_MAX_MS,
         Math.max(ENTRANCE_MIN_MS, chord.distanceMs - previousDistanceMs),
       );
+      // How far into the duration's own range this chord sits (0 at the fastest bound, 1 at the
+      // slowest) — reused to scale the rise distance the same way, so slow entrances aren't just
+      // longer, they visibly travel further too.
+      const durationFraction = (entranceDurationMs - ENTRANCE_MIN_MS) / (ENTRANCE_MAX_MS - ENTRANCE_MIN_MS);
+      const entranceRisePx = ENTRANCE_MIN_RISE_PX + (ENTRANCE_MAX_RISE_PX - ENTRANCE_MIN_RISE_PX) * durationFraction;
 
       const dots = xs.map((x, i) => {
         const dot = new PIXI.Graphics();
@@ -168,6 +178,7 @@ export class PixiRenderer implements Renderer {
         dots,
         restY,
         entranceDurationMs,
+        entranceRisePx,
         entranceElapsedMs: 0,
       };
       this.applyEntranceFrame(tracked);
@@ -231,11 +242,11 @@ export class PixiRenderer implements Renderer {
   }
 
   /** Sets every dot in `tracked` to its current entrance-animation frame: eased from
-   *  `ENTRANCE_RISE_PX` above `restY` (at `entranceElapsedMs === 0`) down to exactly `restY` (once
+   *  `entranceRisePx` above `restY` (at `entranceElapsedMs === 0`) down to exactly `restY` (once
    *  `entranceElapsedMs` reaches `entranceDurationMs`) — never past it, in either direction. */
   private applyEntranceFrame(tracked: TrackedUpcomingChord): void {
     const t = tracked.entranceDurationMs > 0 ? tracked.entranceElapsedMs / tracked.entranceDurationMs : 1;
-    const y = tracked.restY - ENTRANCE_RISE_PX * (1 - easeOutQuad(t));
+    const y = tracked.restY - tracked.entranceRisePx * (1 - easeOutQuad(t));
     for (const dot of tracked.dots) dot.y = y;
   }
 }

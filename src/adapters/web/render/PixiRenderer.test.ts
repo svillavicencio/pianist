@@ -267,6 +267,7 @@ describe('PixiRenderer', () => {
         ],
         'parliament'
       );
+      renderer.tick(900); // let both entrances (bounded up to 900ms) fully settle first
 
       const nearY = container.children[0]!.y;
       const farY = container.children[1]!.y;
@@ -275,7 +276,7 @@ describe('PixiRenderer', () => {
   });
 
   describe('resting position (static once settled — see "entrance transition" below)', () => {
-    const ENTRANCE_MAX_MS = 320; // must outlast any bounded entrance to reach the true resting position
+    const ENTRANCE_MAX_MS = 900; // must outlast any bounded entrance to reach the true resting position
 
     it('settles an upcoming dot at its distanceMs-implied position', () => {
       const container = new FakeContainer();
@@ -363,6 +364,34 @@ describe('PixiRenderer', () => {
 
       const hitLineY = 1000 * 0.85;
       expect(container.children[0]!.y).toBeLessThan(hitLineY); // y grows downward — starts above (smaller y)
+    });
+
+    it('starts a slow-passage dot further above rest than a fast-passage one — not just a longer duration, a longer glide', () => {
+      const fastContainer = new FakeContainer();
+      new PixiRenderer(fastContainer, 1000, 1000, LOOKAHEAD_MS).showUpcoming(
+        [
+          { distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) },
+          { distanceMs: 50, notes: [62].map((midi) => ({ midi, velocity: 100 })) }, // fast trill gap
+        ],
+        'parliament',
+      );
+      const slowContainer = new FakeContainer();
+      new PixiRenderer(slowContainer, 1000, 1000, LOOKAHEAD_MS).showUpcoming(
+        [
+          { distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) },
+          { distanceMs: 2000, notes: [62].map((midi) => ({ midi, velocity: 100 })) }, // slow, held-note gap
+        ],
+        'parliament',
+      );
+
+      const hitLineY = 1000 * 0.85;
+      const topY = 1000 * 0.15;
+      const fastRestY = hitLineY - (50 / LOOKAHEAD_MS) * (hitLineY - topY);
+      const slowRestY = topY; // distanceMs 2000 > LOOKAHEAD_MS, clamped to the very top of the lane
+
+      const fastStartRise = fastRestY - fastContainer.children[1]!.y;
+      const slowStartRise = slowRestY - slowContainer.children[1]!.y;
+      expect(slowStartRise).toBeGreaterThan(fastStartRise);
     });
 
     it('eases down to exactly the resting position by the time its entrance duration elapses', () => {
