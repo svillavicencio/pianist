@@ -2,8 +2,17 @@ import type { AudioEngine, NoteHandle } from '../../../ports/AudioEngine';
 import type { MidiNote, Velocity } from '../../../domain/types';
 import { findNearestSample, gainFor, playbackRateFor } from './sampleSelection';
 
-/** Duration (seconds) of the linear gain fade-out applied before a source is stopped, to avoid a click. */
-const RELEASE_SECONDS = 0.03;
+/** Duration (seconds) of the fade-out applied when a retrigger of the same pitch cuts a still-sounding note — kept short so a fast-repeated note reads as a clean new attack, not an overlap. */
+const RETRIGGER_RELEASE_SECONDS = 0.03;
+
+/**
+ * Duration (seconds) of the fade-out applied when a key is released early —
+ * simulates the piano damper landing on the string. Deliberately longer than
+ * the retrigger cut so a released note still has some body instead of
+ * clicking off instantly, but far short of the sample's full natural decay
+ * (which is what a held/"pedaled" note gets, since it's never faded at all).
+ */
+const KEY_RELEASE_SECONDS = 0.4;
 
 interface ActiveNote {
   readonly source: AudioBufferSourceNode;
@@ -33,7 +42,7 @@ export class WebAudioEngine implements AudioEngine {
 
   noteOn(midi: MidiNote, velocity: Velocity): NoteHandle {
     // Retrigger: stop anything already sounding for this note before starting the new one.
-    this.stopActive(midi);
+    this.stopActive(midi, RETRIGGER_RELEASE_SECONDS);
 
     const sampleMidi = findNearestSample(midi, Array.from(this.samples.keys()));
     const buffer = this.samples.get(sampleMidi)!;
@@ -55,20 +64,20 @@ export class WebAudioEngine implements AudioEngine {
     return {
       release: () => {
         if (this.active.get(midi) !== voice) return; // already retriggered — nothing to release
-        this.stopActive(midi);
+        this.stopActive(midi, KEY_RELEASE_SECONDS);
       },
     };
   }
 
-  private stopActive(midi: MidiNote): void {
+  private stopActive(midi: MidiNote, releaseSeconds: number): void {
     const note = this.active.get(midi);
     if (!note) return;
 
     const now = this.context.currentTime;
     note.gainNode.gain.cancelScheduledValues(now);
     note.gainNode.gain.setValueAtTime(note.gainNode.gain.value, now);
-    note.gainNode.gain.linearRampToValueAtTime(0, now + RELEASE_SECONDS);
-    note.source.stop(now + RELEASE_SECONDS);
+    note.gainNode.gain.linearRampToValueAtTime(0, now + releaseSeconds);
+    note.source.stop(now + releaseSeconds);
 
     this.active.delete(midi);
   }

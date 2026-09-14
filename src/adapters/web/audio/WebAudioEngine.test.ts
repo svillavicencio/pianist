@@ -146,6 +146,18 @@ describe('WebAudioEngine.noteOn', () => {
     expect(firstSource.stopCalls).toHaveLength(1);
     expect(context.createdSources).toHaveLength(2);
   });
+
+  it('cuts a retriggered note quickly, unlike the slower key-release fade', () => {
+    const { context, engine } = buildEngine([60]);
+    context.currentTime = 5;
+
+    engine.noteOn(60, 100);
+    const firstSource = context.createdSources[0]!;
+
+    engine.noteOn(60, 100); // retrigger — should stop the first source fast, not with the key-release fade
+
+    expect(firstSource.stopCalls).toEqual([5.03]);
+  });
 });
 
 describe('WebAudioEngine handle.release()', () => {
@@ -159,8 +171,8 @@ describe('WebAudioEngine handle.release()', () => {
 
     handle.release();
 
-    expect(gainNode.gain.linearRampToValueAtTimeCalls).toEqual([{ value: 0, time: 5.03 }]);
-    expect(source.stopCalls).toEqual([5.03]);
+    expect(gainNode.gain.linearRampToValueAtTimeCalls).toEqual([{ value: 0, time: 5.4 }]);
+    expect(source.stopCalls).toEqual([5.4]);
   });
 
   it('does not stop the source again on a second release() call', () => {
