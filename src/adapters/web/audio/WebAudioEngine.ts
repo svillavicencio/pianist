@@ -12,7 +12,7 @@ const RETRIGGER_RELEASE_SECONDS = 0.03;
  * clicking off instantly, but far short of the sample's full natural decay
  * (which is what a held/"pedaled" note gets, since it's never faded at all).
  */
-const KEY_RELEASE_SECONDS = 0.4;
+const KEY_RELEASE_SECONDS = 0.6;
 
 interface ActiveNote {
   readonly source: AudioBufferSourceNode;

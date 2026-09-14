@@ -186,12 +186,18 @@ async function main(): Promise<void> {
     // Notes currently sounding because a press hasn't released yet, keyed by the press id
     // (physical key code or `pointer:<id>`) that started them — see docs/plans/2026-09-14-key-hold-note-sustain-design.md.
     const heldNotes = new Map<string, NoteHandle[]>();
+    // Press ids currently physically down. As long as this is non-empty, it's like a sustain
+    // pedal being held: a released press's notes keep ringing instead of cutting off, and
+    // everything in `heldNotes` only actually releases once the last held press comes up —
+    // see docs/plans/2026-09-14-pedal-hold-simulation-design.md.
+    const activePresses = new Set<string>();
 
     function releaseAllHeldNotes(): void {
       for (const handles of heldNotes.values()) {
         for (const handle of handles) handle.release();
       }
       heldNotes.clear();
+      activePresses.clear();
     }
 
     const unsubscribePress = input.onPress((id) => {
@@ -205,15 +211,19 @@ async function main(): Promise<void> {
         renderer.spawnNoteVisual(note.midi, piece.colorTheme);
       }
       heldNotes.set(id, handles);
+      activePresses.add(id);
       overlay.setProgress(pieceEngine.currentChordIndex, piece.chords.length);
       refreshUpcoming(true);
     });
 
     const unsubscribeRelease = input.onRelease((id) => {
-      const handles = heldNotes.get(id);
-      if (!handles) return;
-      for (const handle of handles) handle.release();
-      heldNotes.delete(id);
+      activePresses.delete(id);
+      if (activePresses.size > 0) return; // pedal still down — leave every held note ringing
+
+      for (const handles of heldNotes.values()) {
+        for (const handle of handles) handle.release();
+      }
+      heldNotes.clear();
     });
 
     const overlay = renderGameOverlay(gameContainer, {
