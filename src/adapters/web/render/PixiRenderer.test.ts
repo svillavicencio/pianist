@@ -181,7 +181,7 @@ describe('PixiRenderer', () => {
   it('shifts lightness on the alternate chord while keeping the same pitch-based hue', () => {
     const container = new FakeContainer();
     const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
-    const strokeSpy = vi.spyOn(PIXI.Graphics.prototype, 'stroke');
+    const fillSpy = vi.spyOn(PIXI.Graphics.prototype, 'fill');
 
     renderer.showUpcoming(
       [
@@ -193,26 +193,26 @@ describe('PixiRenderer', () => {
       false,
     );
 
-    const colors = strokeSpy.mock.calls.map((call) => (call[0] as { color: number }).color);
+    const colors = fillSpy.mock.calls.map((call) => call[0] as number);
     expect(colors).toHaveLength(3);
     expect(colors[0]).toBe(colors[2]); // same pitch + same parity -> identical color
     expect(colors[1]).not.toBe(colors[0]); // same pitch, alternate parity -> shifted lightness
-    strokeSpy.mockRestore();
+    fillSpy.mockRestore();
   });
 
   it('gives different pitches different colors even within the same chord', () => {
     const container = new FakeContainer();
     const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
-    const strokeSpy = vi.spyOn(PIXI.Graphics.prototype, 'stroke');
+    const fillSpy = vi.spyOn(PIXI.Graphics.prototype, 'fill');
 
     renderer.showUpcoming([{ distanceMs: 0, midis: [30, 100] }], 'parliament', false);
 
-    const colors = strokeSpy.mock.calls.map((call) => (call[0] as { color: number }).color);
+    const colors = fillSpy.mock.calls.map((call) => call[0] as number);
     expect(colors[0]).not.toBe(colors[1]);
-    strokeSpy.mockRestore();
+    fillSpy.mockRestore();
   });
 
-  it('draws upcoming dots as hollow (stroked) circles, not filled, to read apart from hit particles', () => {
+  it('draws upcoming dots as filled circles, matching hit particles', () => {
     const container = new FakeContainer();
     const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
     const fillSpy = vi.spyOn(PIXI.Graphics.prototype, 'fill');
@@ -220,8 +220,8 @@ describe('PixiRenderer', () => {
 
     renderer.showUpcoming([{ distanceMs: 0, midis: [60] }], 'parliament', false);
 
-    expect(fillSpy).not.toHaveBeenCalled();
-    expect(strokeSpy).toHaveBeenCalledOnce();
+    expect(fillSpy).toHaveBeenCalledOnce();
+    expect(strokeSpy).not.toHaveBeenCalled();
     fillSpy.mockRestore();
     strokeSpy.mockRestore();
   });
