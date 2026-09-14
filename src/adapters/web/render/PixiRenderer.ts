@@ -3,15 +3,13 @@ import type { Renderer } from '../../../ports/Renderer';
 import type { ColorTheme, MidiNote } from '../../../domain/types';
 import type { UpcomingChordPreview } from '../../../domain/upcomingNotesPreview';
 import { MAX_MIDI, MIN_MIDI, colorForNote, particleStateAt, shiftLightness } from './noteParticleLifecycle';
+import { SPAWN_HEIGHT_FRACTION } from './backdrop';
 
 /** How long (ms) a spawned note visual lives before it's removed; matches PARTICLE lifecycle tuning. */
 const PARTICLE_LIFETIME_MS = 800;
 
 /** Radius (px) of the circle drawn for each note visual, before `particleStateAt`'s scale is applied. */
 const BASE_RADIUS_PX = 24;
-
-/** Fraction of the viewport height a spawned particle sits at; near the bottom, like keys on a keyboard. */
-const SPAWN_HEIGHT_FRACTION = 0.85;
 
 /** Radius (px) of an "upcoming note" preview dot — smaller than a hit particle so the two read as distinct. */
 const UPCOMING_RADIUS_PX = 10;

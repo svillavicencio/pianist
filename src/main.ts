@@ -7,6 +7,7 @@ import { WebAudioEngine } from './adapters/web/audio/WebAudioEngine';
 import type { NoteHandle } from './ports/AudioEngine';
 import { loadRealPianoSamples } from './adapters/web/audio/realPianoSamples';
 import { PixiRenderer } from './adapters/web/render/PixiRenderer';
+import { createBackdrop, drawBackdrop } from './adapters/web/render/backdrop';
 import { DomInputSource } from './adapters/web/input/DomInputSource';
 import { SystemClock } from './adapters/web/time/SystemClock';
 import { contentCatalog, contentPieces } from './content/catalog';
@@ -24,6 +25,10 @@ const MAX_PREVIEW_CHORDS = 80;
 const UPCOMING_LOOKAHEAD_MS = 3000;
 /** Hard cap on dots drawn in the upcoming-notes lane, so a dense trill passage can't flood the screen. */
 const UPCOMING_MAX_NOTES = 40;
+
+/** Matches `backdrop.ts`'s gradient's darkest stop — avoids a flash of Pixi's default background
+ *  before `drawBackdrop` paints the real gradient on the first frame. */
+const BACKGROUND_BOTTOM_HEX_FALLBACK = '#0a0b0d';
 
 /** Slices `piece.chords` down to the leading chunk a preview should play, honoring both the time and count caps. */
 function previewChordsFor(piece: Piece): readonly Chord[] {
@@ -52,11 +57,18 @@ async function main(): Promise<void> {
   mount.append(menuContainer, gameContainer);
 
   const app = new PIXI.Application();
-  await app.init({ resizeTo: window, background: '#111111' });
+  await app.init({ resizeTo: window, background: BACKGROUND_BOTTOM_HEX_FALLBACK });
   gameContainer.appendChild(app.canvas);
 
+  const backdrop = createBackdrop();
+  app.stage.addChild(backdrop.background, backdrop.hitLine);
+  drawBackdrop(backdrop, window.innerWidth, window.innerHeight);
+
   const renderer = new PixiRenderer(app.stage, window.innerWidth, window.innerHeight, UPCOMING_LOOKAHEAD_MS);
-  window.addEventListener('resize', () => renderer.resize(window.innerWidth, window.innerHeight));
+  window.addEventListener('resize', () => {
+    renderer.resize(window.innerWidth, window.innerHeight);
+    drawBackdrop(backdrop, window.innerWidth, window.innerHeight);
+  });
 
   let lastTime = performance.now();
   function frame(now: number): void {
