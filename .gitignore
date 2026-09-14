@@ -2,6 +2,8 @@ node_modules/
 dist/
 # Local Pi runtime state
 .atl/
+# Local CodeGraph index
+.codegraph/
 # OS / editor noise
 .DS_Store
 *.log
