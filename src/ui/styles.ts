@@ -16,6 +16,7 @@ export function injectBaseStyles(): void {
       --text-dim: #a8adb8;
       --accent: #5b8dee;
       --accent-hover: #7aa2f2;
+      --pack-gradient: linear-gradient(160deg, #20242d, #191c22);
     }
 
     body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; }
@@ -36,16 +37,17 @@ export function injectBaseStyles(): void {
     /* Main menu */
     .main-menu { max-width: 760px; margin: 0 auto; padding: 2.5em 1.25em 4em; box-sizing: border-box; }
     .main-menu__header { text-align: center; margin-bottom: 2em; }
-    .main-menu__title { margin: 0 0 0.25em; font-size: 2.25em; letter-spacing: -0.02em; }
+    .main-menu__title { margin: 0 0 0.25em; font-size: 2.5em; font-weight: 700; letter-spacing: -0.03em; }
     .main-menu__subtitle { margin: 0; color: var(--text-dim); font-size: 1.05em; }
     .main-menu__empty { text-align: center; color: var(--text-dim); }
 
     .main-menu__pack {
-      background: var(--surface);
+      background: var(--pack-gradient);
       border: 1px solid var(--border);
-      border-radius: 10px;
+      border-radius: 12px;
       padding: 1.25em 1.5em;
       margin-bottom: 1.25em;
+      box-shadow: 0 8px 24px #00000040;
     }
     .main-menu__pack-title { margin: 0 0 0.1em; font-size: 1.2em; }
     .main-menu__composer-title { margin: 0 0 0.75em; font-weight: normal; color: var(--text-dim); }
