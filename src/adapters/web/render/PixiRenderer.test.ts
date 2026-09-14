@@ -212,15 +212,15 @@ describe('PixiRenderer', () => {
     strokeSpy.mockRestore();
   });
 
-  describe('minimum upcoming-dot spacing', () => {
-    it('enforces a minimum pixel gap between consecutive upcoming dots so a fast passage does not visually merge', () => {
+  describe('strict timing (no artificial minimum spacing)', () => {
+    it('positions two chords at their exact time-proportional distance, even when very close together', () => {
       const container = new FakeContainer();
       const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
 
       renderer.showUpcoming(
         [
           { distanceMs: 0, midis: [60] },
-          { distanceMs: 1, midis: [62] }, // 1ms apart at a 1000ms lookahead -> ~1px apart, unadjusted
+          { distanceMs: 1, midis: [62] }, // 1ms apart at a 1000ms lookahead
         ],
         'parliament',
         false,
@@ -228,34 +228,18 @@ describe('PixiRenderer', () => {
 
       const nearY = container.children[0]!.y;
       const farY = container.children[1]!.y;
-      expect(nearY - farY).toBeGreaterThanOrEqual(28); // MIN_UPCOMING_GAP_PX
+      // yForDistance(0) - yForDistance(1/1000) = (1/1000) * (0.85 - 0.15) * 1000 = 0.7px — no floor.
+      expect(nearY - farY).toBeCloseTo(0.7, 1);
     });
 
-    it('never adjusts the nearest-due dot — only farther ones absorb the compression', () => {
-      const container = new FakeContainer();
-      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
-      const hitLineY = 1000 * 0.85; // SPAWN_HEIGHT_FRACTION
-
-      renderer.showUpcoming(
-        [
-          { distanceMs: 0, midis: [60] },
-          { distanceMs: 1, midis: [62] },
-        ],
-        'parliament',
-        false,
-      );
-
-      expect(container.children[0]!.y).toBeCloseTo(hitLineY);
-    });
-
-    it('leaves well-separated notes untouched', () => {
+    it('leaves well-separated notes exactly as time-proportional as before', () => {
       const container = new FakeContainer();
       const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
 
       renderer.showUpcoming(
         [
           { distanceMs: 0, midis: [60] },
-          { distanceMs: 500, midis: [62] }, // half the lookahead window apart -> already well spaced
+          { distanceMs: 500, midis: [62] },
         ],
         'parliament',
         false,
@@ -263,7 +247,7 @@ describe('PixiRenderer', () => {
 
       const nearY = container.children[0]!.y;
       const farY = container.children[1]!.y;
-      expect(nearY - farY).toBeCloseTo(1000 * 0.5 * (0.85 - 0.15)); // unadjusted yForDistance delta
+      expect(nearY - farY).toBeCloseTo(1000 * 0.5 * (0.85 - 0.15));
     });
   });
 
