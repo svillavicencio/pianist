@@ -140,6 +140,12 @@ export function injectBaseStyles(): void {
       backdrop-filter: blur(2px);
     }
     .pause-menu {
+      /* Own fixed+inset+margin:auto, independent of the scrim's — the scrim only dims the
+         viewport, it doesn't establish a containing block the card can center inside of. Without
+         this the card falls back to static positioning and lands wherever it sits in normal
+         document flow (in practice, off-screen below the fold). */
+      position: fixed;
+      inset: 0;
       display: flex;
       flex-direction: column;
       gap: 0.6em;
