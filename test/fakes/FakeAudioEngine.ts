@@ -1,4 +1,4 @@
-import type { AudioEngine } from '../../src/ports/AudioEngine';
+import type { AudioEngine, NoteHandle } from '../../src/ports/AudioEngine';
 import type { MidiNote, Velocity } from '../../src/domain/types';
 
 export interface RecordedNoteOn {
@@ -16,11 +16,12 @@ export class FakeAudioEngine implements AudioEngine {
     this.initCalled = true;
   }
 
-  noteOn(midi: MidiNote, velocity: Velocity): void {
+  noteOn(midi: MidiNote, velocity: Velocity): NoteHandle {
     this.notesOn.push({ midi, velocity });
-  }
-
-  noteOff(midi: MidiNote): void {
-    this.notesOff.push(midi);
+    return {
+      release: () => {
+        this.notesOff.push(midi);
+      },
+    };
   }
 }

@@ -1,4 +1,4 @@
-import type { AudioEngine } from '../../../ports/AudioEngine';
+import type { AudioEngine, NoteHandle } from '../../../ports/AudioEngine';
 import type { MidiNote, Velocity } from '../../../domain/types';
 import { findNearestSample, gainFor, playbackRateFor } from './sampleSelection';
 
@@ -31,7 +31,7 @@ export class WebAudioEngine implements AudioEngine {
     }
   }
 
-  noteOn(midi: MidiNote, velocity: Velocity): void {
+  noteOn(midi: MidiNote, velocity: Velocity): NoteHandle {
     // Retrigger: stop anything already sounding for this note before starting the new one.
     this.stopActive(midi);
 
@@ -49,11 +49,12 @@ export class WebAudioEngine implements AudioEngine {
     gainNode.connect(this.context.destination);
     source.start();
 
-    this.active.set(midi, { source, gainNode });
-  }
+    const voice: ActiveNote = { source, gainNode };
+    this.active.set(midi, voice);
 
-  noteOff(midi: MidiNote): void {
-    this.stopActive(midi);
+    return {
+      release: () => this.stopActive(midi),
+    };
   }
 
   private stopActive(midi: MidiNote): void {

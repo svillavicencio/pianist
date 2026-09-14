@@ -13,12 +13,23 @@ describe('FakeAudioEngine', () => {
     ]);
   });
 
-  it('records each noteOff call in order', () => {
+  it('records a noteOff when the returned handle is released', () => {
     const engine = new FakeAudioEngine();
-    engine.noteOff(60);
-    engine.noteOff(64);
+    const handle = engine.noteOn(60, 100);
 
-    expect(engine.notesOff).toEqual([60, 64]);
+    expect(engine.notesOff).toEqual([]);
+    handle.release();
+    expect(engine.notesOff).toEqual([60]);
+  });
+
+  it('records releases independently per handle', () => {
+    const engine = new FakeAudioEngine();
+    const a = engine.noteOn(60, 100);
+    const b = engine.noteOn(64, 90);
+
+    b.release();
+    a.release();
+    expect(engine.notesOff).toEqual([64, 60]);
   });
 
   it('marks itself initialized after init() resolves', async () => {
