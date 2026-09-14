@@ -106,4 +106,41 @@ describe('DomInputSource', () => {
     target.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyA', repeat: true }));
     expect(pressed).toEqual(['KeyA']);
   });
+
+  it('treats pointercancel as a release', () => {
+    const target = document.createElement('div');
+    const input = new DomInputSource(target);
+    const released: string[] = [];
+    input.onRelease((id) => released.push(id));
+
+    target.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 3 }));
+    target.dispatchEvent(new PointerEvent('pointercancel', { pointerId: 3 }));
+    expect(released).toEqual(['pointer:3']);
+  });
+
+  it('releases every still-pressed id on blur (focus lost while a key is held)', () => {
+    const target = document.createElement('div');
+    const input = new DomInputSource(target);
+    const released: string[] = [];
+    input.onRelease((id) => released.push(id));
+
+    target.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyA' }));
+    target.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 1 }));
+    target.dispatchEvent(new Event('blur'));
+
+    expect(released.slice().sort()).toEqual(['KeyA', 'pointer:1'].sort());
+  });
+
+  it('does not re-release an id that already released before blur', () => {
+    const target = document.createElement('div');
+    const input = new DomInputSource(target);
+    const released: string[] = [];
+    input.onRelease((id) => released.push(id));
+
+    target.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyA' }));
+    target.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyA' }));
+    target.dispatchEvent(new Event('blur'));
+
+    expect(released).toEqual(['KeyA']);
+  });
 });
