@@ -1,2 +1,9 @@
 node_modules/
 dist/
+# Local Pi runtime state
+.atl/
+# OS / editor noise
+.DS_Store
+*.log
+.vscode/
+.idea/

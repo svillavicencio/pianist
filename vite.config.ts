@@ -1,6 +1,9 @@
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  // GitHub Pages serves project pages under /<repo-name>/, so every asset
+  // reference in the build must be prefixed with it.
+  base: '/pianist/',
   test: {
     environment: 'node',
     // Vitest's default excludes don't know about our worktrees living under
