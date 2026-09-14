@@ -9,10 +9,10 @@ import { SPAWN_HEIGHT_FRACTION } from './backdrop';
 const PARTICLE_LIFETIME_MS = 800;
 
 /** Radius (px) of the circle drawn for each note visual, before `particleStateAt`'s scale is applied. */
-const BASE_RADIUS_PX = 24;
+const BASE_RADIUS_PX = 32;
 
 /** Radius (px) of an "upcoming note" preview dot — smaller than a hit particle so the two read as distinct. */
-const UPCOMING_RADIUS_PX = 10;
+const UPCOMING_RADIUS_PX = 16;
 
 /** Alpha of an "upcoming note" preview dot — dimmer than a hit particle so it reads as "not yet played". */
 const UPCOMING_ALPHA = 0.55;
