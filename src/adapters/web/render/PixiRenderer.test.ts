@@ -145,23 +145,37 @@ describe('PixiRenderer', () => {
     expect(container.children).toHaveLength(1);
   });
 
-  it('draws a multi-note chord as same-colored dots joined by a connecting line', () => {
+  it("clusters a multi-note chord's dots around a shared x instead of spreading by pitch", () => {
+    const container = new FakeContainer();
+    const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
+
+    renderer.showUpcoming([{ distanceMs: 0, midis: [21, 108] }], 'parliament', false);
+
+    const [dotLow, dotHigh] = container.children as PIXI.Graphics[];
+    // 21 and 108 are the full low/high piano range — spread by pitch they'd be 1000px apart
+    // (xForMidi(21)=0, xForMidi(108)=1000). Clustered, they must sit within one small jitter
+    // step of their shared center (average pitch -> x=500 on a 1000-wide stage).
+    expect(dotLow!.x).toBeCloseTo(500, -1);
+    expect(dotHigh!.x).toBeCloseTo(500, -1);
+    expect(Math.abs(dotLow!.x - dotHigh!.x)).toBeLessThan(20);
+  });
+
+  it('leaves a single-note chord positioned by its own pitch, unaffected by clustering', () => {
+    const container = new FakeContainer();
+    const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
+
+    renderer.showUpcoming([{ distanceMs: 0, midis: [108] }], 'parliament', false);
+
+    expect(container.children[0]!.x).toBeCloseTo(1000);
+  });
+
+  it('no longer draws a connecting line for a multi-note chord', () => {
     const container = new FakeContainer();
     const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
 
     renderer.showUpcoming([{ distanceMs: 0, midis: [60, 67] }], 'parliament', false);
 
-    // 1 connecting line + 2 dots for the chord.
-    expect(container.children).toHaveLength(3);
-  });
-
-  it('does not draw a connecting line for a single-note chord', () => {
-    const container = new FakeContainer();
-    const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
-
-    renderer.showUpcoming([{ distanceMs: 0, midis: [60] }], 'parliament', false);
-
-    expect(container.children).toHaveLength(1);
+    expect(container.children).toHaveLength(2); // just the 2 dots, no line graphic
   });
 
   it('shifts lightness on the alternate chord while keeping the same pitch-based hue', () => {

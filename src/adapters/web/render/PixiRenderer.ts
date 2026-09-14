@@ -29,8 +29,10 @@ const UPCOMING_TOP_FRACTION = 0.15;
  *  background loses contrast instead of gaining it. */
 const UPCOMING_ALT_LIGHTNESS_SHIFT = 0.3;
 
-/** Width (px) of the line connecting a multi-note chord's dots — "these notes fire on the same tap". */
-const UPCOMING_CHORD_LINE_WIDTH_PX = 3;
+/** Horizontal offset (px) between adjacent dots in a clustered chord — small relative to the
+ *  dot radius so members still visibly overlap, reading as "one cluster" the way a simultaneous
+ *  chord does in touchpianist/Piano-Flow, rather than as separate notes. */
+const CLUSTER_JITTER_STEP_PX = 8;
 
 /** One tracked particle: the PIXI display object plus how long it's been alive. */
 interface TrackedParticle {
@@ -50,7 +52,6 @@ interface TrackedUpcomingChord {
   readonly xs: readonly number[];
   readonly colors: readonly number[]; // one per dot, same order as `xs`/`dots`
   readonly dots: readonly PIXI.Graphics[];
-  readonly line: PIXI.Graphics | undefined;
 }
 
 /**
@@ -113,10 +114,6 @@ export class PixiRenderer implements Renderer {
         this.container.removeChild(dot);
         dot.destroy();
       }
-      if (tracked.line) {
-        this.container.removeChild(tracked.line);
-        tracked.line.destroy();
-      }
     }
 
     this.upcomingElapsedMs =
@@ -127,14 +124,11 @@ export class PixiRenderer implements Renderer {
       // Odd chords (the "in-between" tap relative to the one before) get lightened, so
       // consecutive taps read apart even when they share a pitch.
       const isAlternate = index % 2 === 1;
-      const xs = chord.midis.map((midi) => this.xForMidi(midi));
+      const xs = this.xsForChord(chord.midis);
       const colors = chord.midis.map((midi) => {
         const base = colorForNote(colorTheme, midi);
         return isAlternate ? shiftLightness(base, UPCOMING_ALT_LIGHTNESS_SHIFT) : base;
       });
-
-      const line = xs.length > 1 ? new PIXI.Graphics() : undefined;
-      if (line) this.container.addChild(line);
 
       const dots = xs.map((x, i) => {
         const dot = new PIXI.Graphics();
@@ -145,7 +139,7 @@ export class PixiRenderer implements Renderer {
         return dot;
       });
 
-      return { distanceMs: chord.distanceMs, xs, colors, dots, line };
+      return { distanceMs: chord.distanceMs, xs, colors, dots };
     });
 
     this.positionUpcoming();
@@ -199,6 +193,16 @@ export class PixiRenderer implements Renderer {
     return clampedT * this.width;
   }
 
+  /** X positions for one chord's notes: a single note keeps its own pitch position; 2+ notes
+   *  (a simultaneous tap) cluster tightly around their average pitch's x, offset only enough
+   *  to read as "more than one dot" — the overlap itself is the "press together" signal. */
+  private xsForChord(midis: readonly MidiNote[]): readonly number[] {
+    if (midis.length <= 1) return midis.map((midi) => this.xForMidi(midi));
+    const averageMidi = midis.reduce((sum, midi) => sum + midi, 0) / midis.length;
+    const clusterX = this.xForMidi(averageMidi);
+    return midis.map((_, i) => clusterX + (i - (midis.length - 1) / 2) * CLUSTER_JITTER_STEP_PX);
+  }
+
   /** Maps a 0..1 "how far out" ratio to a y coordinate: it falls from near the top down to the hit line. */
   private yForDistance(distance: number): number {
     const hitLineY = this.height * SPAWN_HEIGHT_FRACTION;
@@ -222,16 +226,7 @@ export class PixiRenderer implements Renderer {
     for (const tracked of this.upcoming) {
       const remainingMs = tracked.distanceMs - this.upcomingElapsedMs;
       const y = this.yForDistance(this.lookaheadMs > 0 ? remainingMs / this.lookaheadMs : 0);
-
       for (const dot of tracked.dots) dot.y = y;
-
-      if (tracked.line) {
-        tracked.line.clear();
-        tracked.line
-          .moveTo(Math.min(...tracked.xs), y)
-          .lineTo(Math.max(...tracked.xs), y)
-          .stroke({ width: UPCOMING_CHORD_LINE_WIDTH_PX, color: tracked.colors[0]!, alpha: UPCOMING_ALPHA });
-      }
     }
   }
 }
