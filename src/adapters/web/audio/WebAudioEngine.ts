@@ -53,7 +53,10 @@ export class WebAudioEngine implements AudioEngine {
     this.active.set(midi, voice);
 
     return {
-      release: () => this.stopActive(midi),
+      release: () => {
+        if (this.active.get(midi) !== voice) return; // already retriggered — nothing to release
+        this.stopActive(midi);
+      },
     };
   }
 

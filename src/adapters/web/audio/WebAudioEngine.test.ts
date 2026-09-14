@@ -173,4 +173,18 @@ describe('WebAudioEngine handle.release()', () => {
 
     expect(source.stopCalls).toHaveLength(1);
   });
+
+  it('is a no-op if the voice was already replaced by a retrigger of the same pitch', () => {
+    const { context, engine } = buildEngine([60]);
+
+    const firstHandle = engine.noteOn(60, 100);
+    const firstSource = context.createdSources[0]!;
+    engine.noteOn(60, 100); // retriggers — stops firstSource, starts a second voice
+    const secondSource = context.createdSources[1]!;
+
+    firstHandle.release();
+
+    expect(firstSource.stopCalls).toHaveLength(1); // only the retrigger's stop — release() added nothing
+    expect(secondSource.stopCalls).toEqual([]); // and definitely didn't touch the new voice
+  });
 });
