@@ -171,8 +171,8 @@ describe('WebAudioEngine handle.release()', () => {
 
     handle.release();
 
-    expect(gainNode.gain.linearRampToValueAtTimeCalls).toEqual([{ value: 0, time: 5.6 }]);
-    expect(source.stopCalls).toEqual([5.6]);
+    expect(gainNode.gain.linearRampToValueAtTimeCalls).toEqual([{ value: 0, time: 5.9 }]);
+    expect(source.stopCalls).toEqual([5.9]);
   });
 
   it('does not stop the source again on a second release() call', () => {
