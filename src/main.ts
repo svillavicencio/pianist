@@ -184,13 +184,13 @@ async function main(): Promise<void> {
     // Redraws the "falling notes" preview lane from wherever the cursor now sits — called after
     // every cursor move (trigger, seek, restart) so it always shows what's actually coming up next.
     // An arrow function (not a hoisted `function` declaration) so TS keeps `piece` narrowed non-null here.
-    const refreshUpcoming = (): void => {
+    const refreshUpcoming = (advancedByTap: boolean): void => {
       const upcoming = upcomingChordsPreview(
         piece.chords.slice(pieceEngine.currentChordIndex),
         UPCOMING_LOOKAHEAD_MS,
         UPCOMING_MAX_NOTES,
       );
-      renderer.showUpcoming(upcoming, piece.colorTheme);
+      renderer.showUpcoming(upcoming, piece.colorTheme, advancedByTap);
     };
 
     // Notes currently sounding from any press that hasn't released yet, in the order they
@@ -222,7 +222,7 @@ async function main(): Promise<void> {
       }
       activePresses.add(id);
       overlay.setProgress(pieceEngine.currentChordIndex, piece.chords.length);
-      refreshUpcoming();
+      refreshUpcoming(true);
     });
 
     const unsubscribeRelease = input.onRelease((id) => {
@@ -247,7 +247,7 @@ async function main(): Promise<void> {
           onRestart(): void {
             pieceEngine.reset();
             overlay.setProgress(pieceEngine.currentChordIndex, piece.chords.length);
-            refreshUpcoming();
+            refreshUpcoming(false);
             pauseHandle?.destroy();
             pauseHandle = undefined;
             paused = false;
@@ -266,11 +266,11 @@ async function main(): Promise<void> {
         if (paused) return;
         pieceEngine.seekTo(Math.round(ratio * piece.chords.length));
         overlay.setProgress(pieceEngine.currentChordIndex, piece.chords.length);
-        refreshUpcoming();
+        refreshUpcoming(false);
       },
     });
     overlay.setProgress(pieceEngine.currentChordIndex, piece.chords.length);
-    refreshUpcoming();
+    refreshUpcoming(false);
   }
 
   showMainMenu();

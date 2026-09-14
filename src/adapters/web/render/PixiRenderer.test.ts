@@ -25,6 +25,11 @@ class FakeContainer implements NoteVisualContainer {
 /** The upcoming-notes tests use a 1000ms lookahead throughout, so a chord's distanceMs doubles as its ratio * 1000. */
 const LOOKAHEAD_MS = 1000;
 
+/** Every `showUpcoming` call below that isn't specifically testing tap-driven continuity passes
+ *  `false` (a fresh snapshot) — matching a restart/seek/first-call in the real port. */
+const FRESH = false;
+const ADVANCED_BY_TAP = true;
+
 describe('PixiRenderer', () => {
   it('colors a spawned hit particle by its pitch, not a single flat theme color', () => {
     const container = new FakeContainer();
@@ -103,7 +108,8 @@ describe('PixiRenderer', () => {
         { distanceMs: 0, notes: [21].map((midi) => ({ midi, velocity: 100 })) }, // lowest pitch, next up -> near the hit line (bottom)
         { distanceMs: LOOKAHEAD_MS, notes: [108].map((midi) => ({ midi, velocity: 100 })) }, // highest pitch, furthest out -> near the top
       ],
-      'parliament'
+      'parliament',
+      FRESH,
     );
 
     expect(container.children).toHaveLength(2);
@@ -116,7 +122,7 @@ describe('PixiRenderer', () => {
     const container = new FakeContainer();
     const renderer = new PixiRenderer(container, 800, 600, LOOKAHEAD_MS);
 
-    renderer.showUpcoming([{ distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
+    renderer.showUpcoming([{ distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', FRESH);
     const firstDot = container.children[0] as PIXI.Graphics;
     const destroySpy = vi.spyOn(firstDot, 'destroy');
 
@@ -125,7 +131,8 @@ describe('PixiRenderer', () => {
         { distanceMs: 200, notes: [64].map((midi) => ({ midi, velocity: 100 })) },
         { distanceMs: 400, notes: [67].map((midi) => ({ midi, velocity: 100 })) },
       ],
-      'parliament'
+      'parliament',
+      FRESH,
     );
 
     expect(destroySpy).toHaveBeenCalledOnce();
@@ -137,8 +144,8 @@ describe('PixiRenderer', () => {
     const renderer = new PixiRenderer(container, 800, 600, LOOKAHEAD_MS);
 
     renderer.spawnNoteVisual(60, 100, 'parliament');
-    renderer.showUpcoming([{ distanceMs: 0, notes: [64].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
-    renderer.showUpcoming([], 'parliament'); // clearing the preview must not touch the hit particle
+    renderer.showUpcoming([{ distanceMs: 0, notes: [64].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', FRESH);
+    renderer.showUpcoming([], 'parliament', FRESH); // clearing the preview must not touch the hit particle
 
     expect(container.children).toHaveLength(1);
   });
@@ -147,7 +154,7 @@ describe('PixiRenderer', () => {
     const container = new FakeContainer();
     const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
 
-    renderer.showUpcoming([{ distanceMs: 0, notes: [21, 108].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
+    renderer.showUpcoming([{ distanceMs: 0, notes: [21, 108].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', FRESH);
 
     const [dotLow, dotHigh] = container.children as PIXI.Graphics[];
     // 21 and 108 are the full low/high piano range — spread by pitch they'd be 1000px apart
@@ -162,7 +169,7 @@ describe('PixiRenderer', () => {
     const container = new FakeContainer();
     const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
 
-    renderer.showUpcoming([{ distanceMs: 0, notes: [108].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
+    renderer.showUpcoming([{ distanceMs: 0, notes: [108].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', FRESH);
 
     expect(container.children[0]!.x).toBeCloseTo(1000);
   });
@@ -171,7 +178,7 @@ describe('PixiRenderer', () => {
     const container = new FakeContainer();
     const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
 
-    renderer.showUpcoming([{ distanceMs: 0, notes: [60, 67].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
+    renderer.showUpcoming([{ distanceMs: 0, notes: [60, 67].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', FRESH);
 
     expect(container.children).toHaveLength(2); // just the 2 dots, no line graphic
   });
@@ -187,7 +194,8 @@ describe('PixiRenderer', () => {
         { distanceMs: 300, notes: [60].map((midi) => ({ midi, velocity: 100 })) }, // same pitch, next chord -> alternate parity
         { distanceMs: 600, notes: [60].map((midi) => ({ midi, velocity: 100 })) }, // same pitch, same parity as the first
       ],
-      'parliament'
+      'parliament',
+      FRESH,
     );
 
     const colors = fillSpy.mock.calls.map((call) => call[0] as number);
@@ -202,7 +210,7 @@ describe('PixiRenderer', () => {
     const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
     const fillSpy = vi.spyOn(PIXI.Graphics.prototype, 'fill');
 
-    renderer.showUpcoming([{ distanceMs: 0, notes: [30, 100].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
+    renderer.showUpcoming([{ distanceMs: 0, notes: [30, 100].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', FRESH);
 
     const colors = fillSpy.mock.calls.map((call) => call[0] as number);
     expect(colors[0]).not.toBe(colors[1]);
@@ -215,7 +223,7 @@ describe('PixiRenderer', () => {
     const fillSpy = vi.spyOn(PIXI.Graphics.prototype, 'fill');
     const strokeSpy = vi.spyOn(PIXI.Graphics.prototype, 'stroke');
 
-    renderer.showUpcoming([{ distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
+    renderer.showUpcoming([{ distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', FRESH);
 
     expect(fillSpy).toHaveBeenCalledOnce();
     expect(strokeSpy).not.toHaveBeenCalled();
@@ -247,7 +255,8 @@ describe('PixiRenderer', () => {
           { distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) },
           { distanceMs: 1, notes: [62].map((midi) => ({ midi, velocity: 100 })) }, // 1ms apart at a 1000ms lookahead
         ],
-        'parliament'
+        'parliament',
+        FRESH,
       );
 
       const nearY = container.children[0]!.y;
@@ -265,9 +274,9 @@ describe('PixiRenderer', () => {
           { distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) },
           { distanceMs: 500, notes: [62].map((midi) => ({ midi, velocity: 100 })) },
         ],
-        'parliament'
+        'parliament',
+        FRESH,
       );
-      renderer.tick(900); // let both entrances (bounded up to 900ms) fully settle first
 
       const nearY = container.children[0]!.y;
       const farY = container.children[1]!.y;
@@ -275,14 +284,12 @@ describe('PixiRenderer', () => {
     });
   });
 
-  describe('resting position (static once settled — see "entrance transition" below)', () => {
-    const ENTRANCE_MAX_MS = 900; // must outlast any bounded entrance to reach the true resting position
-
-    it('settles an upcoming dot at its distanceMs-implied position', () => {
+  describe('continuous real-time fall', () => {
+    it('positions a freshly-shown dot exactly at its distanceMs-implied position at t=0', () => {
       const container = new FakeContainer();
       const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
-      renderer.showUpcoming([{ distanceMs: LOOKAHEAD_MS / 2, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
-      renderer.tick(ENTRANCE_MAX_MS);
+
+      renderer.showUpcoming([{ distanceMs: LOOKAHEAD_MS / 2, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', FRESH);
 
       const hitLineY = 1000 * 0.85;
       const topY = 1000 * 0.15;
@@ -292,28 +299,35 @@ describe('PixiRenderer', () => {
     it('pins a due chord (distanceMs 0) at the hit line', () => {
       const container = new FakeContainer();
       const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
-      renderer.showUpcoming([{ distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
-      renderer.tick(ENTRANCE_MAX_MS);
+      renderer.showUpcoming([{ distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', FRESH);
 
       expect(container.children[0]!.y).toBeCloseTo(1000 * 0.85);
     });
 
-    it('does not move a settled dot as tick() keeps advancing — only a new showUpcoming repositions it', () => {
+    it('moves a dot continuously toward the hit line as tick() advances, with no tap at all', () => {
       const container = new FakeContainer();
       const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
-      renderer.showUpcoming([{ distanceMs: LOOKAHEAD_MS, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
-      renderer.tick(ENTRANCE_MAX_MS); // let it fully settle first
-      const settledY = container.children[0]!.y;
+      renderer.showUpcoming([{ distanceMs: LOOKAHEAD_MS, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', FRESH);
+      const startY = container.children[0]!.y;
 
-      renderer.tick(50_000); // however long the player waits after that, nothing here should move
+      renderer.tick(LOOKAHEAD_MS / 4);
+      const quarterY = container.children[0]!.y;
+      renderer.tick(LOOKAHEAD_MS / 4);
+      const halfY = container.children[0]!.y;
 
-      expect(container.children[0]!.y).toBe(settledY);
+      // Strictly, continuously closer to the hit line each tick — never static between ticks,
+      // never jumping in one shot.
+      expect(quarterY).toBeGreaterThan(startY);
+      expect(halfY).toBeGreaterThan(quarterY);
+      const hitLineY = 1000 * 0.85;
+      const topY = 1000 * 0.15;
+      expect(halfY).toBeCloseTo(hitLineY - 0.5 * (hitLineY - topY));
     });
 
-    it('leaves upcoming dots undestroyed/uncreated by tick() — same graphics throughout, only repositioned', () => {
+    it('does not create or destroy graphics on tick() — same dots throughout, only repositioned', () => {
       const container = new FakeContainer();
       const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
-      renderer.showUpcoming([{ distanceMs: LOOKAHEAD_MS, notes: [21, 108].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
+      renderer.showUpcoming([{ distanceMs: LOOKAHEAD_MS, notes: [21, 108].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', FRESH);
       const graphicsAfterShow = [...container.children];
 
       renderer.tick(LOOKAHEAD_MS / 2);
@@ -322,7 +336,17 @@ describe('PixiRenderer', () => {
       container.children.forEach((graphic, index) => expect(graphic).toBe(graphicsAfterShow[index]));
     });
 
-    it('keeps every note beyond the first exactly where its own distanceMs puts it, once settled — no approach toward the hit line', () => {
+    it('pins an overdue chord at the hit line instead of overshooting past it while the player is slow', () => {
+      const container = new FakeContainer();
+      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
+      renderer.showUpcoming([{ distanceMs: 100, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', FRESH);
+
+      renderer.tick(100_000); // player waits far longer than this chord's own distance
+
+      expect(container.children[0]!.y).toBeCloseTo(1000 * 0.85);
+    });
+
+    it("keeps two notes' relative spacing constant while waiting — the second never creeps toward the first", () => {
       const container = new FakeContainer();
       const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
       renderer.showUpcoming(
@@ -331,141 +355,65 @@ describe('PixiRenderer', () => {
           { distanceMs: 400, notes: [62].map((midi) => ({ midi, velocity: 100 })) },
         ],
         'parliament',
+        FRESH,
       );
-      renderer.tick(ENTRANCE_MAX_MS);
-      const secondDotY = container.children[1]!.y;
+      const initialGap = container.children[1]!.y - container.children[0]!.y;
 
-      renderer.tick(400); // right up to (and past) when the second note becomes due
+      renderer.tick(150); // player waits, well before the second note is due
 
-      const hitLineY = 1000 * 0.85;
-      expect(container.children[1]!.y).toBe(secondDotY); // did not creep toward the hit line
-      expect(container.children[1]!.y).toBeLessThan(hitLineY - 1); // stayed clearly separated from the first
+      const laterGap = container.children[1]!.y - container.children[0]!.y;
+      // Both dots move down by the same real-time amount, so the gap between them is preserved —
+      // this is the exact "second note creeps toward the first" bug this model rules out by
+      // construction, not by a compression/anti-stacking hack.
+      expect(laterGap).toBeCloseTo(initialGap);
     });
 
-    it('recomputes every dot fresh (a jump, never a continuation) on the next showUpcoming call', () => {
+    it("carries a chord's due moment across a tap-advanced showUpcoming call — no jump", () => {
       const container = new FakeContainer();
       const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
-      renderer.showUpcoming([{ distanceMs: 400, notes: [62].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
-      renderer.tick(1_000_000); // waiting changes nothing now — position is static until the next call
+      renderer.showUpcoming(
+        [
+          { distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) },
+          { distanceMs: 400, notes: [62].map((midi) => ({ midi, velocity: 100 })) },
+        ],
+        'parliament',
+        FRESH,
+      );
 
-      renderer.showUpcoming([{ distanceMs: 0, notes: [62].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
-      renderer.tick(ENTRANCE_MAX_MS);
+      renderer.tick(150); // player taps partway to the second note's due moment
+      const secondDotYBeforeTap = container.children[1]!.y;
 
-      expect(container.children[0]!.y).toBeCloseTo(1000 * 0.85); // settles at its new position
+      // The tap consumes chord 0; chord 1 becomes the new chord 0, now 250ms from due
+      // (400 - 150). advancedByTap=true must carry its due moment forward untouched.
+      renderer.showUpcoming([{ distanceMs: 250, notes: [62].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', ADVANCED_BY_TAP);
+
+      expect(container.children[0]!.y).toBeCloseTo(secondDotYBeforeTap);
     });
-  });
 
-  describe('entrance transition', () => {
-    it('starts a freshly-shown dot above its resting position, not already there', () => {
+    it('does NOT carry a due moment forward when advancedByTap is false (a genuine reset)', () => {
       const container = new FakeContainer();
       const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
-
-      renderer.showUpcoming([{ distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
-
-      const hitLineY = 1000 * 0.85;
-      expect(container.children[0]!.y).toBeLessThan(hitLineY); // y grows downward — starts above (smaller y)
-    });
-
-    it('starts a slow-passage dot further above rest than a fast-passage one — not just a longer duration, a longer glide', () => {
-      const fastContainer = new FakeContainer();
-      new PixiRenderer(fastContainer, 1000, 1000, LOOKAHEAD_MS).showUpcoming(
+      renderer.showUpcoming(
         [
           { distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) },
-          { distanceMs: 50, notes: [62].map((midi) => ({ midi, velocity: 100 })) }, // fast trill gap
+          { distanceMs: 400, notes: [62].map((midi) => ({ midi, velocity: 100 })) },
         ],
         'parliament',
+        FRESH,
       );
-      const slowContainer = new FakeContainer();
-      new PixiRenderer(slowContainer, 1000, 1000, LOOKAHEAD_MS).showUpcoming(
-        [
-          { distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) },
-          { distanceMs: 2000, notes: [62].map((midi) => ({ midi, velocity: 100 })) }, // slow, held-note gap
-        ],
-        'parliament',
-      );
+
+      renderer.tick(150);
+      const secondDotYBeforeReset = container.children[1]!.y;
+
+      // A restart/seek (advancedByTap=false), not a tap — even though the content lines up the
+      // same way, this must NOT carry the old due moment forward; it re-derives fresh from now.
+      renderer.showUpcoming([{ distanceMs: 250, notes: [62].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', FRESH);
 
       const hitLineY = 1000 * 0.85;
       const topY = 1000 * 0.15;
-      const fastRestY = hitLineY - (50 / LOOKAHEAD_MS) * (hitLineY - topY);
-      const slowRestY = topY; // distanceMs 2000 > LOOKAHEAD_MS, clamped to the very top of the lane
-
-      const fastStartRise = fastRestY - fastContainer.children[1]!.y;
-      const slowStartRise = slowRestY - slowContainer.children[1]!.y;
-      expect(slowStartRise).toBeGreaterThan(fastStartRise);
-    });
-
-    it('eases down to exactly the resting position by the time its entrance duration elapses', () => {
-      const container = new FakeContainer();
-      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
-      renderer.showUpcoming([{ distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
-
-      renderer.tick(320); // the widest possible entrance bound
-
-      expect(container.children[0]!.y).toBeCloseTo(1000 * 0.85);
-    });
-
-    it('never overshoots past the resting position even long after the entrance would have finished', () => {
-      const container = new FakeContainer();
-      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
-      renderer.showUpcoming([{ distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
-
-      renderer.tick(320);
-      const atSettleY = container.children[0]!.y;
-      renderer.tick(100_000);
-
-      expect(container.children[0]!.y).toBe(atSettleY);
-    });
-
-    it('moves partway toward its resting position mid-entrance, not all at once', () => {
-      const container = new FakeContainer();
-      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
-      // distanceMs of 250 clamps the entrance duration into the middle of its bounds (80-320ms).
-      renderer.showUpcoming([{ distanceMs: 250, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
-      const startY = container.children[0]!.y;
-
-      renderer.tick(50); // partway through a ~250ms entrance
-
-      const midY = container.children[0]!.y;
-      const hitLineY = 1000 * 0.85;
-      expect(midY).toBeGreaterThan(startY); // moved down some...
-      expect(midY).toBeLessThan(hitLineY - 5); // ...but nowhere near fully settled yet
-    });
-
-    it('gives a fast passage (small gap since the previous chord) a shorter entrance than a slow one', () => {
-      const fastContainer = new FakeContainer();
-      const fastRenderer = new PixiRenderer(fastContainer, 1000, 1000, LOOKAHEAD_MS);
-      fastRenderer.showUpcoming(
-        [
-          { distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) },
-          { distanceMs: 50, notes: [62].map((midi) => ({ midi, velocity: 100 })) }, // fast trill gap
-        ],
-        'parliament',
-      );
-
-      const slowContainer = new FakeContainer();
-      const slowRenderer = new PixiRenderer(slowContainer, 1000, 1000, LOOKAHEAD_MS);
-      slowRenderer.showUpcoming(
-        [
-          { distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) },
-          { distanceMs: 2000, notes: [62].map((midi) => ({ midi, velocity: 100 })) }, // slow, held-note gap
-        ],
-        'parliament',
-      );
-
-      // Same real elapsed time into both entrances: the fast one's duration clamps to the 80ms
-      // floor (50ms gap), so 100ms in it's already fully settled; the slow one's clamps to the
-      // 320ms ceiling (2000ms gap), so 100ms in it's still well into its transition.
-      fastRenderer.tick(100);
-      slowRenderer.tick(100);
-
-      const hitLineY = 1000 * 0.85;
-      const topY = 1000 * 0.15;
-      const fastRestY = hitLineY - (50 / LOOKAHEAD_MS) * (hitLineY - topY);
-      const slowRestY = topY; // distanceMs 2000 > LOOKAHEAD_MS, clamped to the very top of the lane
-
-      const fastDistanceFromRest = Math.abs(fastContainer.children[1]!.y - fastRestY);
-      const slowDistanceFromRest = Math.abs(slowContainer.children[1]!.y - slowRestY);
-      expect(fastDistanceFromRest).toBeLessThan(slowDistanceFromRest);
+      const freshY = hitLineY - (250 / LOOKAHEAD_MS) * (hitLineY - topY);
+      expect(container.children[0]!.y).toBeCloseTo(freshY);
+      expect(container.children[0]!.y).not.toBeCloseTo(secondDotYBeforeReset, 0);
     });
   });
 });

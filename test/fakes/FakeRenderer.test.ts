@@ -31,10 +31,11 @@ describe('FakeRenderer', () => {
 
   it('remembers the most recent upcoming-chords preview', () => {
     const renderer = new FakeRenderer();
-    renderer.showUpcoming([{ distanceMs: 0, notes: [{ midi: 60, velocity: 100 }] }], 'parliament');
+    renderer.showUpcoming([{ distanceMs: 0, notes: [{ midi: 60, velocity: 100 }] }], 'parliament', false);
     renderer.showUpcoming(
       [{ distanceMs: 500, notes: [{ midi: 64, velocity: 100 }, { midi: 67, velocity: 100 }] }],
       'parliament',
+      true,
     );
 
     expect(renderer.lastUpcoming).toEqual([
