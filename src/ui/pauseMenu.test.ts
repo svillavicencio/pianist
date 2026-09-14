@@ -73,4 +73,21 @@ describe('renderPauseMenu', () => {
     resumeButton.click();
     expect(callbacks.onResume).not.toHaveBeenCalled();
   });
+
+  it('renders a scrim behind the menu card to dim the paused game', () => {
+    const container = document.createElement('div');
+    renderPauseMenu(container, makeCallbacks());
+
+    expect(container.querySelector('.pause-menu__scrim')).not.toBeNull();
+  });
+
+  it('destroy() removes the scrim along with the menu card', () => {
+    const container = document.createElement('div');
+    const handle = renderPauseMenu(container, makeCallbacks());
+
+    handle.destroy();
+
+    expect(container.querySelector('.pause-menu__scrim')).toBeNull();
+    expect(container.querySelector('.pause-menu')).toBeNull();
+  });
 });

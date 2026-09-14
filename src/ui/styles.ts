@@ -131,9 +131,13 @@ export function injectBaseStyles(): void {
     }
 
     /* Pause menu */
-    .pause-menu {
+    .pause-menu__scrim {
       position: fixed;
       inset: 0;
+      background: #05060766;
+      backdrop-filter: blur(2px);
+    }
+    .pause-menu {
       display: flex;
       flex-direction: column;
       gap: 0.6em;

@@ -12,6 +12,10 @@ export interface PauseMenuHandle {
 
 /** Renders the in-game pause screen: Resume, Restart, and Main Menu, one real `<button>` each. */
 export function renderPauseMenu(container: HTMLElement, callbacks: PauseMenuCallbacks): PauseMenuHandle {
+  const scrim = document.createElement('div');
+  scrim.className = 'pause-menu__scrim';
+  container.appendChild(scrim);
+
   const root = document.createElement('div');
   root.className = 'pause-menu';
 
@@ -37,6 +41,7 @@ export function renderPauseMenu(container: HTMLElement, callbacks: PauseMenuCall
     destroy(): void {
       for (const cleanup of cleanups) cleanup();
       root.remove();
+      scrim.remove();
     },
   };
 }
