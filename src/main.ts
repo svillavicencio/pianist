@@ -183,9 +183,12 @@ async function main(): Promise<void> {
       renderer.showUpcoming(upcoming, piece.colorTheme, continuedFromPreviousTap);
     };
 
-    // Notes currently sounding because a press hasn't released yet, keyed by the press id
-    // (physical key code or `pointer:<id>`) that started them — see docs/plans/2026-09-14-key-hold-note-sustain-design.md.
-    const heldNotes = new Map<string, NoteHandle[]>();
+    // Notes currently sounding from any press that hasn't released yet, in the order they
+    // started — see docs/plans/2026-09-14-key-hold-note-sustain-design.md. A flat list rather
+    // than keyed by press id: the same physical key can be tapped several times while the
+    // pedal (see below) is down, and each tap must keep its own entry — keying by id would let
+    // a later tap of the same key silently overwrite (and orphan) an earlier one's handles.
+    const heldNotes: NoteHandle[] = [];
     // Press ids currently physically down. As long as this is non-empty, it's like a sustain
     // pedal being held: a released press's notes keep ringing instead of cutting off, and
     // everything in `heldNotes` only actually releases once the last held press comes up —
@@ -193,10 +196,8 @@ async function main(): Promise<void> {
     const activePresses = new Set<string>();
 
     function releaseAllHeldNotes(): void {
-      for (const handles of heldNotes.values()) {
-        for (const handle of handles) handle.release();
-      }
-      heldNotes.clear();
+      for (const handle of heldNotes) handle.release();
+      heldNotes.length = 0;
       activePresses.clear();
     }
 
@@ -205,12 +206,10 @@ async function main(): Promise<void> {
       if (audioCtx.state === 'suspended') void audioCtx.resume();
 
       const notes = pieceEngine.trigger();
-      const handles: NoteHandle[] = [];
       for (const note of notes) {
-        handles.push(audioEngine.noteOn(note.midi, note.velocity));
+        heldNotes.push(audioEngine.noteOn(note.midi, note.velocity));
         renderer.spawnNoteVisual(note.midi, piece.colorTheme);
       }
-      heldNotes.set(id, handles);
       activePresses.add(id);
       overlay.setProgress(pieceEngine.currentChordIndex, piece.chords.length);
       refreshUpcoming(true);
@@ -220,10 +219,8 @@ async function main(): Promise<void> {
       activePresses.delete(id);
       if (activePresses.size > 0) return; // pedal still down — leave every held note ringing
 
-      for (const handles of heldNotes.values()) {
-        for (const handle of handles) handle.release();
-      }
-      heldNotes.clear();
+      for (const handle of heldNotes) handle.release();
+      heldNotes.length = 0;
     });
 
     const overlay = renderGameOverlay(gameContainer, {
