@@ -351,15 +351,18 @@ describe('PixiRenderer', () => {
       const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
       renderer.showUpcoming(
         [
-          { distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) },
-          { distanceMs: 400, notes: [62].map((midi) => ({ midi, velocity: 100 })) },
+          // Neither chord is due yet (both distanceMs > 0) — if the first one were already
+          // pinned at the hit line, the gap could only shrink as the second one fell, which
+          // would defeat the point of this test.
+          { distanceMs: 200, notes: [60].map((midi) => ({ midi, velocity: 100 })) },
+          { distanceMs: 600, notes: [62].map((midi) => ({ midi, velocity: 100 })) },
         ],
         'parliament',
         FRESH,
       );
       const initialGap = container.children[1]!.y - container.children[0]!.y;
 
-      renderer.tick(150); // player waits, well before the second note is due
+      renderer.tick(150); // player waits, well before either note is due
 
       const laterGap = container.children[1]!.y - container.children[0]!.y;
       // Both dots move down by the same real-time amount, so the gap between them is preserved —
@@ -402,18 +405,20 @@ describe('PixiRenderer', () => {
         FRESH,
       );
 
-      renderer.tick(150);
-      const secondDotYBeforeReset = container.children[1]!.y;
+      renderer.tick(150); // clockMs is now 150; the second chord's original dueAtMs stays 400
 
-      // A restart/seek (advancedByTap=false), not a tap — even though the content lines up the
-      // same way, this must NOT carry the old due moment forward; it re-derives fresh from now.
-      renderer.showUpcoming([{ distanceMs: 250, notes: [62].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', FRESH);
+      // A restart/seek (advancedByTap=false) — 300 (not 250) is deliberate: a carried-over due
+      // moment would stay 400 regardless of this new distanceMs, but a *fresh* one is clockMs +
+      // distanceMs = 150 + 300 = 450. Picking a distanceMs that would coincidentally reconstruct
+      // the same 400 (e.g. 250) can't tell the two code paths apart — this can.
+      renderer.showUpcoming([{ distanceMs: 300, notes: [62].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', FRESH);
 
       const hitLineY = 1000 * 0.85;
       const topY = 1000 * 0.15;
-      const freshY = hitLineY - (250 / LOOKAHEAD_MS) * (hitLineY - topY);
+      const freshY = hitLineY - (300 / LOOKAHEAD_MS) * (hitLineY - topY); // dueAtMs 450, remaining 300
+      const wouldBeCarriedOverY = hitLineY - (250 / LOOKAHEAD_MS) * (hitLineY - topY); // dueAtMs 400, remaining 250
       expect(container.children[0]!.y).toBeCloseTo(freshY);
-      expect(container.children[0]!.y).not.toBeCloseTo(secondDotYBeforeReset, 0);
+      expect(container.children[0]!.y).not.toBeCloseTo(wouldBeCarriedOverY, 0);
     });
   });
 });
