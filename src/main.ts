@@ -68,7 +68,10 @@ async function main(): Promise<void> {
   const audioCtx = new AudioContext();
   // Real samples load in the background as soon as the app starts, so the
   // first "Perform" click doesn't have to wait on the network round trip.
-  const samplesPromise = loadRealPianoSamples(audioCtx, '/piano-samples');
+  // BASE_URL already carries a trailing slash (e.g. '/pianist/' on GitHub
+  // Pages, '/' in dev) — loadRealPianoSamples appends its own leading slash
+  // per filename, so this path segment must not carry one of its own.
+  const samplesPromise = loadRealPianoSamples(audioCtx, `${import.meta.env.BASE_URL}piano-samples`);
 
   let menuHandle: MainMenuHandle | undefined;
 
