@@ -43,7 +43,7 @@ const CLUSTER_JITTER_STEP_PX = 8;
  *  piece this session's real-time-clock attempt got wrong: a chord the player hasn't reached yet
  *  must NEVER approach the hit line on its own just because time passes — only an actual tap (a
  *  fresh snapshot) may move its target. */
-const TRANSITION_MIN_MS = 150;
+const TRANSITION_MIN_MS = 200;
 const TRANSITION_MAX_MS = 900;
 
 /** Multiplies every "raw" tempo-derived duration above before it's clamped. A literal 1:1 mapping
@@ -53,7 +53,7 @@ const TRANSITION_MAX_MS = 900;
  *  glide into something comfortably legible while still scaling with the piece's actual pace
  *  (a passage twice as slow still glides noticeably longer), rather than replacing it with a flat
  *  constant. */
-const TRANSITION_SLOWDOWN_FACTOR = 1.6;
+const TRANSITION_SLOWDOWN_FACTOR = 2.5;
 
 /** Bounds (px) for how far above its resting position a *brand-new* dot starts its transition —
  *  scaled by the same fast/slow gap the duration uses, so a slow entrance isn't just longer but
