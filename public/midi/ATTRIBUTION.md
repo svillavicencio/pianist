@@ -52,3 +52,14 @@ The repository uses this file as an offline source for the generated piece data.
 - License text: <https://creativecommons.org/licenses/by-sa/3.0/de/deed.en>
 
 The repository uses this file as an offline source for the generated piece data.
+
+`elise.mid` is the complete Ludwig van Beethoven *Für Elise*, WoO 59, a performance MIDI sourced from piano-midi.de:
+
+- Canonical page: <http://piano-midi.de/beeth.htm>
+- Source URL: <http://piano-midi.de/midis/beethoven/elise.mid>
+- SHA-256: `a1481bdafe94d33e0de8934c97aec45534c908bc797bae7293f626074aec2e07`
+- Performer/source credit: Bernd Krueger
+- License: Creative Commons BY-SA 3.0 DE
+- License text: <https://creativecommons.org/licenses/by-sa/3.0/de/deed.en>
+
+The repository uses this file as an offline source for the generated piece data.

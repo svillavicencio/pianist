@@ -9,6 +9,7 @@ import { lisztLaCampanellaPiece } from "./pieces/lisztLaCampanella";
 import { lisztHungarianRhapsodyNo2Piece } from "./pieces/lisztHungarianRhapsodyNo2";
 import { beethovenPathetiqueMov1Piece } from "./pieces/beethovenPathetiqueMov1";
 import { beethovenMoonlightSonataMov3Piece } from "./pieces/beethovenMoonlightSonataMov3";
+import { beethovenFurElisePiece } from "./pieces/beethovenFurElise";
 import { chopinFantaisieImpromptuPiece } from "./pieces/chopinFantaisieImpromptu";
 import { chopinHeroicPolonaisePiece } from "./pieces/chopinHeroicPolonaise";
 import { chopinBalladeNo1Piece } from "./pieces/chopinBalladeNo1";
@@ -59,6 +60,11 @@ export const contentCatalog = new PieceCatalog([
         dataName: beethovenMoonlightSonataMov3Piece.dataName,
         displayName: beethovenMoonlightSonataMov3Piece.displayName,
         colorTheme: beethovenMoonlightSonataMov3Piece.colorTheme,
+      },
+      {
+        dataName: beethovenFurElisePiece.dataName,
+        displayName: beethovenFurElisePiece.displayName,
+        colorTheme: beethovenFurElisePiece.colorTheme,
       },
     ],
   },
@@ -151,6 +157,7 @@ export const contentPieces: ReadonlyMap<string, Piece> = new Map([
     beethovenMoonlightSonataMov3Piece.dataName,
     beethovenMoonlightSonataMov3Piece,
   ],
+  [beethovenFurElisePiece.dataName, beethovenFurElisePiece],
   [chopinFantaisieImpromptuPiece.dataName, chopinFantaisieImpromptuPiece],
   [chopinHeroicPolonaisePiece.dataName, chopinHeroicPolonaisePiece],
   [chopinBalladeNo1Piece.dataName, chopinBalladeNo1Piece],

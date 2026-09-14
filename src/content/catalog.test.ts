@@ -46,6 +46,14 @@ describe("contentCatalog", () => {
     );
   });
 
+  it("finds the Für Elise piece summary by dataName", () => {
+    expect(contentCatalog.findPiece("beethoven_fur_elise")).toEqual({
+      dataName: "beethoven_fur_elise",
+      displayName: "Für Elise",
+      colorTheme: "parliament",
+    });
+  });
+
   it("finds the rachmaninoff prelude piece summary by dataName", () => {
     expect(contentCatalog.findPiece("rachmaninoff_prelude_op3_no2")).toEqual({
       dataName: "rachmaninoff_prelude_op3_no2",
@@ -129,7 +137,7 @@ describe("contentCatalog", () => {
   it("groups pieces into six composer packs including Debussy Impressionist Favorites", () => {
     expect(contentCatalog.packs).toHaveLength(6);
     expect(contentCatalog.packs[0]?.pieces).toHaveLength(2);
-    expect(contentCatalog.packs[1]?.pieces).toHaveLength(4);
+    expect(contentCatalog.packs[1]?.pieces).toHaveLength(5);
     expect(contentCatalog.packs[2]?.pieces).toHaveLength(1);
     expect(contentCatalog.packs[3]?.composerDisplay).toBe("Frédéric Chopin");
     expect(contentCatalog.packs[3]?.packDisplay).toBe("Romantic Favorites");
@@ -240,5 +248,11 @@ describe("contentPieces", () => {
     const piece = contentPieces.get("beethoven_moonlight_sonata_mov3");
     expect(piece).toBeDefined();
     expect(piece?.chords).toHaveLength(3781);
+  });
+
+  it("has the complete Für Elise performance with 785 chords", () => {
+    const piece = contentPieces.get("beethoven_fur_elise");
+    expect(piece).toBeDefined();
+    expect(piece?.chords).toHaveLength(785);
   });
 });
