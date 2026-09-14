@@ -2,7 +2,7 @@ import type { SavedPosition } from '../../../domain/types';
 import type { SavedPositionRepository } from '../../../domain/SavedPositionRepository';
 
 /** Namespaces a piece's storage key so it can't collide with unrelated app data. */
-const keyFor = (pieceDataName: string): string => `gordopianist:saved-position:${pieceDataName}`;
+const keyFor = (pieceDataName: string): string => `pianist:saved-position:${pieceDataName}`;
 
 /** A `SavedPositionRepository` backed by a `localStorage`-shaped `Storage`, one entry per piece. */
 export class LocalStorageRepository implements SavedPositionRepository {

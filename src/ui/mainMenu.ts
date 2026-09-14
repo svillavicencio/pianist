@@ -31,7 +31,7 @@ export function renderMainMenu(
 
   const title = document.createElement('h1');
   title.className = 'main-menu__title';
-  title.textContent = 'gordopianist';
+  title.textContent = 'π-anist';
   header.appendChild(title);
 
   const subtitle = document.createElement('p');

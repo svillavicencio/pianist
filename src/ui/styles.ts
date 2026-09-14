@@ -1,4 +1,4 @@
-const BASE_STYLE_ELEMENT_ID = 'gordopianist-base-styles';
+const BASE_STYLE_ELEMENT_ID = 'pianist-base-styles';
 
 /** Injects the shared base stylesheet into `document.head`, guarded so double calls are a no-op. Opt-in — the eventual composition root calls this once, none of the screens call it themselves. */
 export function injectBaseStyles(): void {

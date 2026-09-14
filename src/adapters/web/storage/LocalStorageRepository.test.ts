@@ -22,7 +22,7 @@ describe('LocalStorageRepository', () => {
 
   it('returns undefined without throwing when the stored value is corrupt JSON', () => {
     const repo = new LocalStorageRepository(localStorage);
-    localStorage.setItem('gordopianist:saved-position:broken', 'not valid json {{{');
+    localStorage.setItem('pianist:saved-position:broken', 'not valid json {{{');
 
     expect(() => repo.load('broken')).not.toThrow();
     expect(repo.load('broken')).toBeUndefined();

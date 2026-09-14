@@ -40,7 +40,7 @@ describe('renderMainMenu', () => {
     const container = document.createElement('div');
     renderMainMenu(container, makeCatalog(), makeCallbacks());
 
-    expect(container.querySelector('.main-menu__title')!.textContent).toBe('gordopianist');
+    expect(container.querySelector('.main-menu__title')!.textContent).toBe('π-anist');
     expect(container.querySelectorAll('.main-menu__pack').length).toBe(2);
     expect(container.querySelectorAll('.main-menu__piece-row').length).toBe(3);
     expect(container.textContent).toContain('Bach Essentials');

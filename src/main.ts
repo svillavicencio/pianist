@@ -234,5 +234,5 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  console.error('gordopianist failed to start', error);
+  console.error('pianist failed to start', error);
 });
