@@ -17,6 +17,7 @@ export class DomInputSource implements InputSource {
   private readonly target: EventListenerTarget;
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
+    if (event.repeat) return;
     this.press(event.code);
   };
 

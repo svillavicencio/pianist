@@ -94,4 +94,16 @@ describe('DomInputSource', () => {
 
     input.destroy();
   });
+
+  it('ignores OS auto-repeat keydown events — a held key presses once, not repeatedly', () => {
+    const target = document.createElement('div');
+    const input = new DomInputSource(target);
+    const pressed: string[] = [];
+    input.onPress((id) => pressed.push(id));
+
+    target.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyA' }));
+    target.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyA', repeat: true }));
+    target.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyA', repeat: true }));
+    expect(pressed).toEqual(['KeyA']);
+  });
 });
