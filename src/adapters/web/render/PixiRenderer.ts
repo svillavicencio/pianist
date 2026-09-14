@@ -34,6 +34,10 @@ const UPCOMING_ALT_LIGHTNESS_SHIFT = 0.3;
 /** Width (px) of the line connecting a multi-note chord's dots — "these notes fire on the same tap". */
 const UPCOMING_CHORD_LINE_WIDTH_PX = 3;
 
+/** Minimum vertical gap (px) enforced between two consecutive upcoming dots — without this, a
+ *  fast passage's notes (close together in authored time) render close enough to visually merge. */
+const MIN_UPCOMING_GAP_PX = 28;
+
 /** One tracked particle: the PIXI display object plus how long it's been alive. */
 interface TrackedParticle {
   readonly graphic: PIXI.Graphics;
@@ -221,9 +225,18 @@ export class PixiRenderer implements Renderer {
    * ("this is how long you'd wait before the tap after next").
    */
   private positionUpcoming(): void {
+    let previousY: number | undefined;
     for (const tracked of this.upcoming) {
       const remainingMs = tracked.distanceMs - this.upcomingElapsedMs;
-      const y = this.yForDistance(this.lookaheadMs > 0 ? remainingMs / this.lookaheadMs : 0);
+      let y = this.yForDistance(this.lookaheadMs > 0 ? remainingMs / this.lookaheadMs : 0);
+
+      // Only farther-out notes get pushed — the nearest-due one (index 0, previousY still
+      // undefined on the first iteration) always renders at its true position, since accuracy
+      // matters most right at the hit line.
+      if (previousY !== undefined && previousY - y < MIN_UPCOMING_GAP_PX) {
+        y = previousY - MIN_UPCOMING_GAP_PX;
+      }
+      previousY = y;
 
       for (const dot of tracked.dots) dot.y = y;
 

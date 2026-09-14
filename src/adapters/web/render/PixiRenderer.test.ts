@@ -212,6 +212,61 @@ describe('PixiRenderer', () => {
     strokeSpy.mockRestore();
   });
 
+  describe('minimum upcoming-dot spacing', () => {
+    it('enforces a minimum pixel gap between consecutive upcoming dots so a fast passage does not visually merge', () => {
+      const container = new FakeContainer();
+      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
+
+      renderer.showUpcoming(
+        [
+          { distanceMs: 0, midis: [60] },
+          { distanceMs: 1, midis: [62] }, // 1ms apart at a 1000ms lookahead -> ~1px apart, unadjusted
+        ],
+        'parliament',
+        false,
+      );
+
+      const nearY = container.children[0]!.y;
+      const farY = container.children[1]!.y;
+      expect(nearY - farY).toBeGreaterThanOrEqual(28); // MIN_UPCOMING_GAP_PX
+    });
+
+    it('never adjusts the nearest-due dot — only farther ones absorb the compression', () => {
+      const container = new FakeContainer();
+      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
+      const hitLineY = 1000 * 0.85; // SPAWN_HEIGHT_FRACTION
+
+      renderer.showUpcoming(
+        [
+          { distanceMs: 0, midis: [60] },
+          { distanceMs: 1, midis: [62] },
+        ],
+        'parliament',
+        false,
+      );
+
+      expect(container.children[0]!.y).toBeCloseTo(hitLineY);
+    });
+
+    it('leaves well-separated notes untouched', () => {
+      const container = new FakeContainer();
+      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
+
+      renderer.showUpcoming(
+        [
+          { distanceMs: 0, midis: [60] },
+          { distanceMs: 500, midis: [62] }, // half the lookahead window apart -> already well spaced
+        ],
+        'parliament',
+        false,
+      );
+
+      const nearY = container.children[0]!.y;
+      const farY = container.children[1]!.y;
+      expect(nearY - farY).toBeCloseTo(1000 * 0.5 * (0.85 - 0.15)); // unadjusted yForDistance delta
+    });
+  });
+
   describe('falling animation', () => {
     it('moves an upcoming dot smoothly toward the hit line as tick() advances real time', () => {
       const container = new FakeContainer();
