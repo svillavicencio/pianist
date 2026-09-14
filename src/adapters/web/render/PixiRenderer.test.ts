@@ -433,7 +433,7 @@ describe('PixiRenderer', () => {
     it('moves partway toward its resting position mid-transition, not all at once', () => {
       const container = new FakeContainer();
       const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
-      // distanceMs of 250 clamps the transition duration into the middle of its bounds (80-900ms).
+      // distanceMs of 250, x1.6 slowdown = 400ms — inside the duration bounds (150-900ms).
       renderer.showUpcoming([{ distanceMs: 250, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', FRESH);
       const startY = container.children[0]!.y;
 
@@ -468,9 +468,10 @@ describe('PixiRenderer', () => {
         FRESH,
       );
 
-      // Same real elapsed time into both transitions: the fast one's duration clamps to the 80ms
-      // floor (50ms gap), so 100ms in it's already fully settled; the slow one's clamps to the
-      // 900ms ceiling (2000ms gap), so 100ms in it's still near the start of its transition.
+      // Same real elapsed time into both transitions: the fast one's duration clamps to the 150ms
+      // floor (50ms gap x1.6 = 80ms, still under the floor), so 100ms in it's most of the way
+      // there; the slow one's clamps to the 900ms ceiling (2000ms gap x1.6), so 100ms in it's
+      // still near the very start of its transition — much further from rest than the fast one.
       fastRenderer.tick(100);
       slowRenderer.tick(100);
 
@@ -551,8 +552,8 @@ describe('PixiRenderer', () => {
       const hitLineY = 1000 * 0.85;
       const topY = 1000 * 0.15;
       const toY = hitLineY - (250 / LOOKAHEAD_MS) * (hitLineY - topY);
-      const durationMs = Math.min(900, Math.max(80, 250 - 0));
-      const durationFraction = (durationMs - 80) / (900 - 80);
+      const durationMs = Math.min(900, Math.max(150, (250 - 0) * 1.6));
+      const durationFraction = (durationMs - 150) / (900 - 150);
       const risePx = 18 + (110 - 18) * durationFraction;
       const expectedFreshFromY = toY - risePx;
 
@@ -577,15 +578,65 @@ describe('PixiRenderer', () => {
 
       renderer.tick(500); // the player actually takes half a second before tapping
       renderer.showUpcoming([{ distanceMs: 0, notes: [62].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', ADVANCED_BY_TAP);
+      // duration = 500ms real gap x1.6 slowdown = 800ms.
 
       const hitLineY = 1000 * 0.85;
-      renderer.tick(200); // only 200 of the real ~500ms glide has elapsed
-      // Under the old formula (duration clamped from the unrelated 50ms authored gap to the 80ms
-      // floor), this would already be fully settled at the hit line by now — that's the "rushed"
-      // bug. The fix keeps it visibly still gliding.
+      renderer.tick(200); // only a quarter of the ~800ms glide has elapsed
+      // Under the old (buggy) formula (duration clamped from the unrelated 50ms authored gap to
+      // the old 80ms floor), this would already be fully settled at the hit line by now — that's
+      // the "rushed" bug. The fix keeps it visibly still gliding, well short of arrival.
       expect(container.children[0]!.y).toBeLessThan(hitLineY - 5);
 
-      renderer.tick(300); // total 500ms since the tap — now the glide should be complete
+      renderer.tick(600); // total 800ms since the tap — now the glide should be complete
+      expect(container.children[0]!.y).toBeCloseTo(hitLineY);
+    });
+
+    it('stretches a carried-over glide beyond a literal 1:1 mapping to real elapsed time (the "still aggressive" fix)', () => {
+      const container = new FakeContainer();
+      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
+      renderer.showUpcoming(
+        [
+          { distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) },
+          { distanceMs: 50, notes: [62].map((midi) => ({ midi, velocity: 100 })) }, // its own ~150ms entrance settles well within the 250ms below
+        ],
+        'parliament',
+        FRESH,
+      );
+
+      renderer.tick(250); // the player takes 250ms before tapping
+      renderer.showUpcoming([{ distanceMs: 0, notes: [62].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', ADVANCED_BY_TAP);
+      // duration = 250ms real gap x1.6 = 400ms, not a literal 250ms.
+
+      const hitLineY = 1000 * 0.85;
+      renderer.tick(250); // exactly the raw real gap has now elapsed since the tap — a literal
+      // (unscaled) mapping would already be fully settled at exactly this point.
+      expect(container.children[0]!.y).toBeLessThan(hitLineY - 5); // the x1.6 stretch means it's still mid-glide
+
+      renderer.tick(150); // total 400ms since the tap — now the glide should be complete
+      expect(container.children[0]!.y).toBeCloseTo(hitLineY);
+    });
+
+    it('raises even a near-instant tap to a comfortable minimum glide, never snapping', () => {
+      const container = new FakeContainer();
+      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
+      renderer.showUpcoming(
+        [
+          { distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) },
+          { distanceMs: 30, notes: [62].map((midi) => ({ midi, velocity: 100 })) },
+        ],
+        'parliament',
+        FRESH,
+      );
+
+      renderer.tick(10); // the player double-taps almost instantly — barely any real gap at all
+      renderer.showUpcoming([{ distanceMs: 0, notes: [62].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', ADVANCED_BY_TAP);
+      // raw duration = 10ms x1.6 = 16ms, clamped up to the 150ms floor — not the old 80ms one.
+
+      const hitLineY = 1000 * 0.85;
+      renderer.tick(80); // past the old 80ms floor, but still short of the new 150ms one
+      expect(container.children[0]!.y).toBeLessThan(hitLineY - 5); // not settled yet
+
+      renderer.tick(70); // total 150ms since the tap
       expect(container.children[0]!.y).toBeCloseTo(hitLineY);
     });
 

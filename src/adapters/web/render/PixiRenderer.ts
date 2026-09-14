@@ -32,18 +32,28 @@ const UPCOMING_ALT_LIGHTNESS_SHIFT = 0.3;
 const CLUSTER_JITTER_STEP_PX = 8;
 
 /** Bounds (ms) for how long a dot takes to glide to its resting position. A *brand-new* chord's
- *  duration is drawn from its own gap since the previous chord in the passage; a chord that was
- *  *already visible* instead uses how much real time actually just elapsed since the last
- *  `showUpcoming` call (see `msSinceLastShow`) — either way, clamped to these bounds, so a fast
- *  trill settles almost instantly while a genuinely slow passage (a held whole note, a fermata, or
- *  just a player taking their time) eases in visibly over most of a second, never snapping. Once
- *  `elapsedMs` reaches this, `tick()` stops touching the dot — it holds its resting position
- *  indefinitely, no matter how long the player waits, until the next `showUpcoming` call gives it
- *  a new target. That's the piece this session's real-time-clock attempt got wrong: a chord the
- *  player hasn't reached yet must NEVER approach the hit line on its own just because time passes
- *  — only an actual tap (a fresh snapshot) may move its target. */
-const TRANSITION_MIN_MS = 80;
+ *  raw duration is drawn from its own gap since the previous chord in the passage; a chord that
+ *  was *already visible* instead uses how much real time actually just elapsed since the last
+ *  `showUpcoming` call (see `msSinceLastShow`). Either way the raw value is scaled by
+ *  `TRANSITION_SLOWDOWN_FACTOR` and then clamped to these bounds, so a fast trill still settles
+ *  quickly while a genuinely slow passage (a held whole note, a fermata, or just a player taking
+ *  their time) eases in visibly over most of a second, never snapping. Once `elapsedMs` reaches
+ *  this, `tick()` stops touching the dot — it holds its resting position indefinitely, no matter
+ *  how long the player waits, until the next `showUpcoming` call gives it a new target. That's the
+ *  piece this session's real-time-clock attempt got wrong: a chord the player hasn't reached yet
+ *  must NEVER approach the hit line on its own just because time passes — only an actual tap (a
+ *  fresh snapshot) may move its target. */
+const TRANSITION_MIN_MS = 150;
 const TRANSITION_MAX_MS = 900;
+
+/** Multiplies every "raw" tempo-derived duration above before it's clamped. A literal 1:1 mapping
+ *  to real tempo — even once it was honestly *sourced* from real elapsed time or an authored gap —
+ *  still reads as too quick to track: most passages sit a few hundred ms apart, and a plain glide
+ *  over exactly that long felt abrupt regardless of how correct the number was. This stretches the
+ *  glide into something comfortably legible while still scaling with the piece's actual pace
+ *  (a passage twice as slow still glides noticeably longer), rather than replacing it with a flat
+ *  constant. */
+const TRANSITION_SLOWDOWN_FACTOR = 1.6;
 
 /** Bounds (px) for how far above its resting position a *brand-new* dot starts its transition —
  *  scaled by the same fast/slow gap the duration uses, so a slow entrance isn't just longer but
@@ -173,14 +183,20 @@ export class PixiRenderer implements Renderer {
         // fall speed tied to the piece's real tempo instead of an authored gap that has nothing to
         // do with this chord or this moment — see `msSinceLastShow`.
         fromY = carriedOver.dots[0]?.y ?? toY;
-        durationMs = Math.min(TRANSITION_MAX_MS, Math.max(TRANSITION_MIN_MS, this.msSinceLastShow));
+        durationMs = Math.min(
+          TRANSITION_MAX_MS,
+          Math.max(TRANSITION_MIN_MS, this.msSinceLastShow * TRANSITION_SLOWDOWN_FACTOR),
+        );
       } else {
         // A brand-new chord has no "real elapsed time" to draw from, so its pace instead comes
         // from its own gap since the previous chord in this snapshot — this chord's own authored
         // spacing. `chords[index - 1]` is undefined for the first chord, whose own `distanceMs` is
         // always 0, so this correctly falls back to the fastest bound.
         const previousDistanceMs = chords[index - 1]?.distanceMs ?? 0;
-        durationMs = Math.min(TRANSITION_MAX_MS, Math.max(TRANSITION_MIN_MS, chord.distanceMs - previousDistanceMs));
+        durationMs = Math.min(
+          TRANSITION_MAX_MS,
+          Math.max(TRANSITION_MIN_MS, (chord.distanceMs - previousDistanceMs) * TRANSITION_SLOWDOWN_FACTOR),
+        );
         // How far into the duration's own range this chord sits (0 at the fastest bound, 1 at the
         // slowest) — reused to scale the rise distance the same way, so a slow entrance isn't just
         // longer, it visibly travels further too.
