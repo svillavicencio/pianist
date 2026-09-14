@@ -2,7 +2,7 @@ import * as PIXI from 'pixi.js';
 import type { Renderer } from '../../../ports/Renderer';
 import type { ColorTheme, MidiNote, Velocity } from '../../../domain/types';
 import type { UpcomingChordPreview } from '../../../domain/upcomingNotesPreview';
-import { MAX_MIDI, MIN_MIDI, colorForNote, particleStateAt, radiusForVelocity, shiftLightness } from './noteParticleLifecycle';
+import { MAX_MIDI, MIN_MIDI, colorForNote, easeOutQuad, particleStateAt, radiusForVelocity, shiftLightness } from './noteParticleLifecycle';
 import { SPAWN_HEIGHT_FRACTION } from './backdrop';
 
 /** How long (ms) a spawned note visual lives before it's removed; matches PARTICLE lifecycle tuning. */
@@ -31,6 +31,26 @@ const UPCOMING_ALT_LIGHTNESS_SHIFT = 0.3;
  *  chord does in touchpianist/Piano-Flow, rather than as separate notes. */
 const CLUSTER_JITTER_STEP_PX = 8;
 
+/** Bounds (ms) for how long a dot takes to glide to its resting position — whether it's a brand
+ *  new chord entering the lane, or one that was already visible sliding to its updated spot after
+ *  a tap. Drawn from the chord's own gap since the previous one in the passage (clamped to these
+ *  bounds), so a fast trill settles almost instantly while a genuinely slow passage (a held whole
+ *  note, a fermata) eases in visibly over most of a second. Once `elapsedMs` reaches this, `tick()`
+ *  stops touching the dot — it holds its resting position indefinitely, no matter how long the
+ *  player waits, until the next `showUpcoming` call gives it a new target. That's the piece this
+ *  session's real-time-clock attempt got wrong: a chord the player hasn't reached yet must NEVER
+ *  approach the hit line on its own just because time passes — only an actual tap (a fresh
+ *  snapshot) may move its target. */
+const TRANSITION_MIN_MS = 80;
+const TRANSITION_MAX_MS = 900;
+
+/** Bounds (px) for how far above its resting position a *brand-new* dot starts its transition —
+ *  scaled by the same fast/slow gap the duration uses, so a slow entrance isn't just longer but
+ *  visibly travels further too. A dot that was already on screen instead starts exactly where it
+ *  already was (see `showUpcoming`) — these bounds only apply to a genuinely new arrival. */
+const NEW_CHORD_MIN_RISE_PX = 18;
+const NEW_CHORD_MAX_RISE_PX = 110;
+
 /** One tracked particle: the PIXI display object plus how long it's been alive. */
 interface TrackedParticle {
   readonly graphic: PIXI.Graphics;
@@ -39,18 +59,23 @@ interface TrackedParticle {
 }
 
 /**
- * One tracked "upcoming chord" preview dot-group. `dueAtMs` is an absolute point on this
- * renderer's free-running `clockMs` — the moment this chord is exactly due (at the hit line).
- * It's fixed once, when the chord is first shown (see `showUpcoming`), and never mutated
- * afterward: every frame just re-reads how far `dueAtMs` still is from the current `clockMs`,
- * so the dot's height is a pure, continuous function of real elapsed time — no stepping, no
- * re-snapping, no per-dot animation state to advance or cap.
+ * One tracked "upcoming chord" preview dot-group. `toY` is this chord's resting position for the
+ * *current* snapshot — fixed once, from its own `distanceMs`, and never itself a moving target:
+ * waiting longer never nudges it toward the hit line, only a fresh `showUpcoming` snapshot can.
+ * `fromY` is wherever this chord's transition started: either its actual on-screen position a
+ * moment ago (a chord that was already visible, continuing its glide smoothly instead of jumping)
+ * or a point above `toY` (a chord appearing for the first time — see `showUpcoming`). `elapsedMs`
+ * is the only thing `tick()` ever advances here, and only until it reaches `durationMs` — once it
+ * does, the chord is fully settled and `tick()` leaves it alone.
  */
 interface TrackedUpcomingChord {
   readonly xs: readonly number[];
   readonly colors: readonly number[]; // one per dot, same order as `xs`/`dots`
   readonly dots: readonly PIXI.Graphics[];
-  readonly dueAtMs: number;
+  readonly fromY: number;
+  readonly toY: number;
+  readonly durationMs: number;
+  elapsedMs: number;
 }
 
 /**
@@ -75,16 +100,11 @@ export interface NoteVisualContainer {
  * NOT call `app.renderer.resize()` — the caller must do that separately.
  *
  * `lookaheadMs` is the same window the caller passed to `upcomingChordsPreview` — it's
- * needed again here to keep converting each chord's ever-decreasing time-until-due into
- * a 0..1 vertical position as `tick()` advances real time.
+ * needed again here to convert each chord's `distanceMs` into a 0..1 vertical position.
  */
 export class PixiRenderer implements Renderer {
   private readonly particles: TrackedParticle[] = [];
   private upcoming: TrackedUpcomingChord[] = [];
-  /** Free-running real-time clock (ms), advanced only by `tick()`. Never reset — `dueAtMs` values
-   *  are just points on this same timeline, so a reset on restart/seek needs no special-casing
-   *  here: it simply stamps fresh chords `clockMs + distanceMs` ahead of wherever this already is. */
-  private clockMs = 0;
 
   constructor(
     private readonly container: NoteVisualContainer,
@@ -103,21 +123,22 @@ export class PixiRenderer implements Renderer {
   }
 
   /**
-   * Rebuilds the upcoming lane from a fresh snapshot. Positioning stays continuous across the
-   * call: when `advancedByTap` is true, a chord that was already being shown one slot further out
-   * (`this.upcoming[index + 1]` in the *previous* list) keeps its original `dueAtMs` — it just
-   * keeps falling from wherever it already was, uninterrupted. Everything else (a chord newly
-   * revealed at the tail of the window, or every chord when `advancedByTap` is false — a restart,
-   * a seek, or the very first call) gets a fresh `dueAtMs` computed from right now.
+   * Rebuilds the upcoming lane from a fresh snapshot. Every dot's resting position (`toY`) comes
+   * directly from its own `distanceMs` — a chord the player hasn't reached yet never approaches
+   * the hit line just because real time passes; only a fresh snapshot (a tap, or a reset) ever
+   * moves its target, which is what makes the game keep waiting for the player no matter how long
+   * they take on the current note.
+   *
+   * What stays continuous is the glide itself: when `advancedByTap` is true, a chord that was
+   * already being shown one slot further out (`this.upcoming[index + 1]` in the *previous* list)
+   * starts its new glide from wherever it actually is right now — mid-transition or already
+   * settled — instead of jumping straight to its new spot or popping back above it. That's what
+   * turns "recompute everything on every tap" from a visible jump into one continuous motion. A
+   * genuinely new chord (not previously shown, or any chord after a restart/seek, where
+   * `advancedByTap` is false) still enters with the "falling into place" rise from above.
    */
   showUpcoming(chords: readonly UpcomingChordPreview[], colorTheme: ColorTheme, advancedByTap: boolean): void {
     const previous = this.upcoming;
-    for (const tracked of previous) {
-      for (const dot of tracked.dots) {
-        this.container.removeChild(dot);
-        dot.destroy();
-      }
-    }
 
     this.upcoming = chords.map((chord, index) => {
       // Odd chords (the "in-between" tap relative to the one before) get lightened, so
@@ -130,9 +151,32 @@ export class PixiRenderer implements Renderer {
         return isAlternate ? shiftLightness(base, UPCOMING_ALT_LIGHTNESS_SHIFT) : base;
       });
       const radii = chord.notes.map((note) => radiusForVelocity(UPCOMING_RADIUS_PX, note.velocity));
+      const toY = this.yForDistance(this.lookaheadMs > 0 ? chord.distanceMs / this.lookaheadMs : 0);
+
+      // The gap (ms) since the previous chord in this snapshot — this chord's own authored pace —
+      // clamped into the transition-duration bounds. `chords[index - 1]` is undefined for the
+      // first chord, whose own `distanceMs` is always 0, so this correctly falls back to the
+      // fastest bound.
+      const previousDistanceMs = chords[index - 1]?.distanceMs ?? 0;
+      const durationMs = Math.min(
+        TRANSITION_MAX_MS,
+        Math.max(TRANSITION_MIN_MS, chord.distanceMs - previousDistanceMs),
+      );
 
       const carriedOver = advancedByTap ? previous[index + 1] : undefined;
-      const dueAtMs = carriedOver ? carriedOver.dueAtMs : this.clockMs + chord.distanceMs;
+      let fromY: number;
+      if (carriedOver) {
+        // Same chord, still falling (or already settled) from before this call — pick up exactly
+        // where it visually is, so the tap that triggered this call produces no visible jump.
+        fromY = carriedOver.dots[0]?.y ?? toY;
+      } else {
+        // How far into the duration's own range this chord sits (0 at the fastest bound, 1 at the
+        // slowest) — reused to scale the rise distance the same way, so a slow entrance isn't just
+        // longer, it visibly travels further too.
+        const durationFraction = (durationMs - TRANSITION_MIN_MS) / (TRANSITION_MAX_MS - TRANSITION_MIN_MS);
+        const risePx = NEW_CHORD_MIN_RISE_PX + (NEW_CHORD_MAX_RISE_PX - NEW_CHORD_MIN_RISE_PX) * durationFraction;
+        fromY = toY - risePx;
+      }
 
       const dots = xs.map((x, i) => {
         const dot = new PIXI.Graphics();
@@ -143,15 +187,24 @@ export class PixiRenderer implements Renderer {
         return dot;
       });
 
-      const tracked: TrackedUpcomingChord = { xs, colors, dots, dueAtMs };
-      this.applyContinuousFrame(tracked);
+      const tracked: TrackedUpcomingChord = { xs, colors, dots, fromY, toY, durationMs, elapsedMs: 0 };
+      this.applyTransitionFrame(tracked);
       return tracked;
     });
+
+    // Only destroy the previous dots once every carried-over chord above has had a chance to read
+    // its current `y` from them.
+    for (const tracked of previous) {
+      for (const dot of tracked.dots) {
+        this.container.removeChild(dot);
+        dot.destroy();
+      }
+    }
   }
 
-  /** Advances hit-particle animation, then repositions every upcoming dot from its (unchanged)
-   *  `dueAtMs` against the newly-advanced clock — the whole lane falls continuously, every frame,
-   *  whether or not the player has touched anything. */
+  /** Advances hit-particle animation, plus any upcoming dots still mid-transition (see
+   *  `TRANSITION_MIN_MS`) — every other upcoming dot is already settled and untouched here;
+   *  waiting never moves a note past its own resting position. */
   tick(deltaMs: number): void {
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const particle = this.particles[i];
@@ -167,8 +220,11 @@ export class PixiRenderer implements Renderer {
       }
     }
 
-    this.clockMs += deltaMs;
-    for (const tracked of this.upcoming) this.applyContinuousFrame(tracked);
+    for (const tracked of this.upcoming) {
+      if (tracked.elapsedMs >= tracked.durationMs) continue; // already settled
+      tracked.elapsedMs = Math.min(tracked.elapsedMs + deltaMs, tracked.durationMs);
+      this.applyTransitionFrame(tracked);
+    }
   }
 
   resize(width: number, height: number): void {
@@ -201,13 +257,12 @@ export class PixiRenderer implements Renderer {
     return hitLineY - clampedDistance * (hitLineY - topY);
   }
 
-  /** Sets every dot in `tracked` to its current continuous-fall frame: however far `dueAtMs` still
-   *  is from `clockMs`, expressed as a 0..1 ratio of `lookaheadMs` and mapped straight through
-   *  `yForDistance` — negative (overdue) or over-1 ratios are clamped there, so a chord just
-   *  settles at the hit line if the player is running behind, never overshooting past it. */
-  private applyContinuousFrame(tracked: TrackedUpcomingChord): void {
-    const remainingMs = tracked.dueAtMs - this.clockMs;
-    const y = this.yForDistance(this.lookaheadMs > 0 ? remainingMs / this.lookaheadMs : 0);
+  /** Sets every dot in `tracked` to its current transition frame: eased from `fromY` (at
+   *  `elapsedMs === 0`) to exactly `toY` (once `elapsedMs` reaches `durationMs`) — never past it,
+   *  in either direction. */
+  private applyTransitionFrame(tracked: TrackedUpcomingChord): void {
+    const t = tracked.durationMs > 0 ? tracked.elapsedMs / tracked.durationMs : 1;
+    const y = tracked.fromY + (tracked.toY - tracked.fromY) * easeOutQuad(t);
     for (const dot of tracked.dots) dot.y = y;
   }
 }
