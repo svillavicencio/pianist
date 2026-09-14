@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { contentPieces } from '../../../content/catalog';
 import { colorForNote, MAX_MIDI, MIN_MIDI, particleStateAt, shiftLightness } from './noteParticleLifecycle';
 
 describe('particleStateAt', () => {
@@ -69,6 +70,20 @@ describe('colorForNote', () => {
 
   it('clamps an above-range MIDI value to the same color as the highest key', () => {
     expect(colorForNote('ocean', 200)).toBe(colorForNote('ocean', MAX_MIDI));
+  });
+
+  it('every color theme actually used by real piece content has a defined gradient, not the flat white fallback', () => {
+    // Regression guard: "amethyst" (used by 4 real pieces, e.g. Chopin's Fantaisie-Impromptu) was
+    // missing from THEME_GRADIENTS after the original THEME_COLORS map was ported over, silently
+    // falling back to plain white with zero pitch variation — caught only by manual browser
+    // verification, not by any test. This asserts every theme actually in use produces visible
+    // hue variation across the pitch range, so a future missing theme fails loudly instead.
+    const themesInUse = new Set([...contentPieces.values()].map((piece) => piece.colorTheme));
+    for (const theme of themesInUse) {
+      const low = colorForNote(theme, MIN_MIDI);
+      const high = colorForNote(theme, MAX_MIDI);
+      expect(low, `theme "${theme}" produced no color variation across the pitch range`).not.toBe(high);
+    }
   });
 });
 

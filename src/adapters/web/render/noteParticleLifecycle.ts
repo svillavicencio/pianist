@@ -57,6 +57,10 @@ const THEME_GRADIENTS: Readonly<Record<string, ThemeGradient>> = {
   midnight: { hueStart: 255, hueEnd: 290, saturation: 0.6, lightness: 0.58 },
   silver: { hueStart: 205, hueEnd: 215, saturation: 0.1, lightness: 0.68 },
   crimson: { hueStart: 335, hueEnd: 355, saturation: 0.7, lightness: 0.55 },
+  // Present in real piece content (e.g. Chopin's Fantaisie-Impromptu) but missing from the
+  // original flat THEME_COLORS map — was silently falling back to plain white before this entry
+  // was added, discovered during manual verification (see plan's Task 9).
+  amethyst: { hueStart: 270, hueEnd: 310, saturation: 0.55, lightness: 0.62 },
 };
 
 /** Maps a piece's `ColorTheme` and a note's pitch to a PIXI-friendly hex color. */
