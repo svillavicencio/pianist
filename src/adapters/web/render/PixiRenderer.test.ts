@@ -103,8 +103,7 @@ describe('PixiRenderer', () => {
         { distanceMs: 0, notes: [21].map((midi) => ({ midi, velocity: 100 })) }, // lowest pitch, next up -> near the hit line (bottom)
         { distanceMs: LOOKAHEAD_MS, notes: [108].map((midi) => ({ midi, velocity: 100 })) }, // highest pitch, furthest out -> near the top
       ],
-      'parliament',
-      false,
+      'parliament'
     );
 
     expect(container.children).toHaveLength(2);
@@ -117,7 +116,7 @@ describe('PixiRenderer', () => {
     const container = new FakeContainer();
     const renderer = new PixiRenderer(container, 800, 600, LOOKAHEAD_MS);
 
-    renderer.showUpcoming([{ distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', false);
+    renderer.showUpcoming([{ distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
     const firstDot = container.children[0] as PIXI.Graphics;
     const destroySpy = vi.spyOn(firstDot, 'destroy');
 
@@ -126,8 +125,7 @@ describe('PixiRenderer', () => {
         { distanceMs: 200, notes: [64].map((midi) => ({ midi, velocity: 100 })) },
         { distanceMs: 400, notes: [67].map((midi) => ({ midi, velocity: 100 })) },
       ],
-      'parliament',
-      false,
+      'parliament'
     );
 
     expect(destroySpy).toHaveBeenCalledOnce();
@@ -139,8 +137,8 @@ describe('PixiRenderer', () => {
     const renderer = new PixiRenderer(container, 800, 600, LOOKAHEAD_MS);
 
     renderer.spawnNoteVisual(60, 100, 'parliament');
-    renderer.showUpcoming([{ distanceMs: 0, notes: [64].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', false);
-    renderer.showUpcoming([], 'parliament', false); // clearing the preview must not touch the hit particle
+    renderer.showUpcoming([{ distanceMs: 0, notes: [64].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
+    renderer.showUpcoming([], 'parliament'); // clearing the preview must not touch the hit particle
 
     expect(container.children).toHaveLength(1);
   });
@@ -149,7 +147,7 @@ describe('PixiRenderer', () => {
     const container = new FakeContainer();
     const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
 
-    renderer.showUpcoming([{ distanceMs: 0, notes: [21, 108].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', false);
+    renderer.showUpcoming([{ distanceMs: 0, notes: [21, 108].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
 
     const [dotLow, dotHigh] = container.children as PIXI.Graphics[];
     // 21 and 108 are the full low/high piano range — spread by pitch they'd be 1000px apart
@@ -164,7 +162,7 @@ describe('PixiRenderer', () => {
     const container = new FakeContainer();
     const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
 
-    renderer.showUpcoming([{ distanceMs: 0, notes: [108].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', false);
+    renderer.showUpcoming([{ distanceMs: 0, notes: [108].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
 
     expect(container.children[0]!.x).toBeCloseTo(1000);
   });
@@ -173,7 +171,7 @@ describe('PixiRenderer', () => {
     const container = new FakeContainer();
     const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
 
-    renderer.showUpcoming([{ distanceMs: 0, notes: [60, 67].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', false);
+    renderer.showUpcoming([{ distanceMs: 0, notes: [60, 67].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
 
     expect(container.children).toHaveLength(2); // just the 2 dots, no line graphic
   });
@@ -189,8 +187,7 @@ describe('PixiRenderer', () => {
         { distanceMs: 300, notes: [60].map((midi) => ({ midi, velocity: 100 })) }, // same pitch, next chord -> alternate parity
         { distanceMs: 600, notes: [60].map((midi) => ({ midi, velocity: 100 })) }, // same pitch, same parity as the first
       ],
-      'parliament',
-      false,
+      'parliament'
     );
 
     const colors = fillSpy.mock.calls.map((call) => call[0] as number);
@@ -205,7 +202,7 @@ describe('PixiRenderer', () => {
     const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
     const fillSpy = vi.spyOn(PIXI.Graphics.prototype, 'fill');
 
-    renderer.showUpcoming([{ distanceMs: 0, notes: [30, 100].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', false);
+    renderer.showUpcoming([{ distanceMs: 0, notes: [30, 100].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
 
     const colors = fillSpy.mock.calls.map((call) => call[0] as number);
     expect(colors[0]).not.toBe(colors[1]);
@@ -218,7 +215,7 @@ describe('PixiRenderer', () => {
     const fillSpy = vi.spyOn(PIXI.Graphics.prototype, 'fill');
     const strokeSpy = vi.spyOn(PIXI.Graphics.prototype, 'stroke');
 
-    renderer.showUpcoming([{ distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', false);
+    renderer.showUpcoming([{ distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
 
     expect(fillSpy).toHaveBeenCalledOnce();
     expect(strokeSpy).not.toHaveBeenCalled();
@@ -250,8 +247,7 @@ describe('PixiRenderer', () => {
           { distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) },
           { distanceMs: 1, notes: [62].map((midi) => ({ midi, velocity: 100 })) }, // 1ms apart at a 1000ms lookahead
         ],
-        'parliament',
-        false,
+        'parliament'
       );
 
       const nearY = container.children[0]!.y;
@@ -269,8 +265,7 @@ describe('PixiRenderer', () => {
           { distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) },
           { distanceMs: 500, notes: [62].map((midi) => ({ midi, velocity: 100 })) },
         ],
-        'parliament',
-        false,
+        'parliament'
       );
 
       const nearY = container.children[0]!.y;
@@ -283,36 +278,37 @@ describe('PixiRenderer', () => {
     it('moves an upcoming dot smoothly toward the hit line as tick() advances real time', () => {
       const container = new FakeContainer();
       const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
-      renderer.showUpcoming([{ distanceMs: LOOKAHEAD_MS, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', false);
+      renderer.showUpcoming([{ distanceMs: LOOKAHEAD_MS / 2, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
+
+      const hitLineY = 1000 * 0.85;
+      const topY = 1000 * 0.15;
+      expect(container.children[0]!.y).toBeCloseTo(hitLineY - 0.5 * (hitLineY - topY));
+    });
+
+    it('pins a due chord (distanceMs 0) at the hit line', () => {
+      const container = new FakeContainer();
+      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
+      renderer.showUpcoming([{ distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
+
+      expect(container.children[0]!.y).toBeCloseTo(1000 * 0.85);
+    });
+
+    it('does not move upcoming dots as tick() advances real time — only a new showUpcoming repositions them', () => {
+      const container = new FakeContainer();
+      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
+      renderer.showUpcoming([{ distanceMs: LOOKAHEAD_MS, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
       const startY = container.children[0]!.y;
 
-      renderer.tick(LOOKAHEAD_MS / 2); // halfway to due
+      renderer.tick(LOOKAHEAD_MS / 2);
+      renderer.tick(50_000); // however long the player waits, nothing here should move
 
-      const midY = container.children[0]!.y;
-      expect(midY).toBeGreaterThan(startY); // fell further down (y grows downward)
-
-      renderer.tick(LOOKAHEAD_MS / 2); // now exactly due
-
-      const dueY = container.children[0]!.y;
-      expect(dueY).toBeGreaterThan(midY);
+      expect(container.children[0]!.y).toBe(startY);
     });
 
-    it('settles a due chord at the hit line and keeps it there rather than overshooting', () => {
+    it('leaves upcoming dots untouched by tick() — no destroy/recreate, only hit particles animate there', () => {
       const container = new FakeContainer();
       const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
-      renderer.showUpcoming([{ distanceMs: 500, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', false);
-
-      renderer.tick(500); // exactly due
-      const atDueY = container.children[0]!.y;
-      renderer.tick(2000); // long past due, e.g. the player hasn't tapped yet
-
-      expect(container.children[0]!.y).toBe(atDueY);
-    });
-
-    it('reuses (rather than recreates) a multi-note chord\'s line and dots across ticks', () => {
-      const container = new FakeContainer();
-      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
-      renderer.showUpcoming([{ distanceMs: LOOKAHEAD_MS, notes: [21, 108].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', false);
+      renderer.showUpcoming([{ distanceMs: LOOKAHEAD_MS, notes: [21, 108].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
       const graphicsAfterShow = [...container.children];
 
       renderer.tick(LOOKAHEAD_MS / 2);
@@ -321,84 +317,7 @@ describe('PixiRenderer', () => {
       container.children.forEach((graphic, index) => expect(graphic).toBe(graphicsAfterShow[index]));
     });
 
-    it('animates the second chord smoothly, unlike the always-already-due first one', () => {
-      const container = new FakeContainer();
-      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
-      renderer.showUpcoming(
-        [
-          { distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) }, // always "next up" — nothing to animate
-          { distanceMs: 400, notes: [62].map((midi) => ({ midi, velocity: 100 })) },
-        ],
-        'parliament',
-        false,
-      );
-      const secondDotStartY = container.children[1]!.y;
-
-      renderer.tick(200); // halfway to the second chord's due time
-
-      expect(container.children[1]!.y).toBeGreaterThan(secondDotStartY); // fell further (y grows downward)
-    });
-
-    it('lets the second chord finish falling to the hit line, then freezes the whole lane there until the player taps', () => {
-      const container = new FakeContainer();
-      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
-      renderer.showUpcoming(
-        [
-          { distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) },
-          { distanceMs: 400, notes: [62].map((midi) => ({ midi, velocity: 100 })) },
-          { distanceMs: 900, notes: [64].map((midi) => ({ midi, velocity: 100 })) }, // shouldn't get closer than its position at t=400 without input
-        ],
-        'parliament',
-        false,
-      );
-
-      renderer.tick(400); // the second chord is now also due
-      const thirdDotAtFreezeY = container.children[2]!.y;
-
-      renderer.tick(2000); // the player still hasn't tapped — real time keeps passing regardless
-
-      expect(container.children[2]!.y).toBe(thirdDotAtFreezeY); // frozen, the clock stopped advancing past 400ms
-    });
-
-    it('resets the fall clock on a discontinuous jump (seek/restart), snapshotting from the new cursor', () => {
-      const container = new FakeContainer();
-      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
-      renderer.showUpcoming([{ distanceMs: LOOKAHEAD_MS, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', false);
-      renderer.tick(LOOKAHEAD_MS); // that chord is now at the hit line
-
-      // A seek/restart (continuedFromPreviousTap: false): the next chord is snapshotted fresh at
-      // the far edge of the window again, regardless of how much time had elapsed before the jump.
-      renderer.showUpcoming([{ distanceMs: LOOKAHEAD_MS, notes: [62].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', false);
-      const freshY = container.children[0]!.y;
-
-      const hitLineY = 1000 * 0.85;
-      expect(freshY).toBeLessThan(hitLineY - 1);
-    });
-
-    it('keeps the fall flowing across a tap instead of snapping the new next-up chord into place', () => {
-      const container = new FakeContainer();
-      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
-      renderer.showUpcoming(
-        [
-          { distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) },
-          { distanceMs: 400, notes: [62].map((midi) => ({ midi, velocity: 100 })) }, // will become the new "next up" once the player taps
-        ],
-        'parliament',
-        false,
-      );
-
-      renderer.tick(150); // the player taps early, before the second chord has finished falling
-      const yJustBeforeTap = container.children[1]!.y;
-
-      // The tap: cursor advances, [62] becomes the new upcoming[0]. Continuous, so it must not
-      // snap straight to the hit line — it should still read as "150ms into a 400ms fall".
-      renderer.showUpcoming([{ distanceMs: 0, notes: [62].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', true);
-      const yRightAfterTap = container.children[0]!.y;
-
-      expect(yRightAfterTap).toBeCloseTo(yJustBeforeTap);
-    });
-
-    it('lets the newly-promoted chord keep falling normally after a continuous tap', () => {
+    it('keeps every note beyond the first exactly where its own distanceMs puts it — no approach toward the hit line', () => {
       const container = new FakeContainer();
       const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
       renderer.showUpcoming(
@@ -407,65 +326,25 @@ describe('PixiRenderer', () => {
           { distanceMs: 400, notes: [62].map((midi) => ({ midi, velocity: 100 })) },
         ],
         'parliament',
-        false,
       );
-      renderer.tick(150); // tapped early, at 150 of 400ms
+      const secondDotY = container.children[1]!.y;
 
-      renderer.showUpcoming([{ distanceMs: 0, notes: [62].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', true);
-      const yRightAfterTap = container.children[0]!.y;
-
-      renderer.tick(250); // the remaining 250ms of its original fall elapse normally
+      renderer.tick(399); // right on the verge of the second note becoming due
 
       const hitLineY = 1000 * 0.85;
-      expect(container.children[0]!.y).toBeGreaterThan(yRightAfterTap); // kept falling further
-      expect(container.children[0]!.y).toBeCloseTo(hitLineY); // and arrives right on time
+      expect(container.children[1]!.y).toBe(secondDotY); // did not creep toward the hit line
+      expect(container.children[1]!.y).toBeLessThan(hitLineY - 1); // stayed clearly separated from the first
     });
 
-    it('does not corrupt the next fall after waiting far past the freeze point before finally tapping', () => {
+    it('recomputes every dot fresh (a jump, never a continuation) on the next showUpcoming call', () => {
       const container = new FakeContainer();
       const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
-      renderer.showUpcoming(
-        [
-          { distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) },
-          { distanceMs: 400, notes: [62].map((midi) => ({ midi, velocity: 100 })) },
-        ],
-        'parliament',
-        false,
-      );
+      renderer.showUpcoming([{ distanceMs: 400, notes: [62].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
+      renderer.tick(1_000_000); // waiting changes nothing now — position is static until the next call
 
-      renderer.tick(400); // frozen here
-      renderer.tick(50_000); // the player waits a long time before finally tapping
+      renderer.showUpcoming([{ distanceMs: 0, notes: [62].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
 
-      // The tap lands: [62] becomes the new upcoming[0], and a fresh chord a full window away
-      // follows it. That fresh chord must render near the top, not snap to the hit line — the
-      // 50 real seconds of waiting must not have corrupted the rebase.
-      renderer.showUpcoming(
-        [
-          { distanceMs: 0, notes: [62].map((midi) => ({ midi, velocity: 100 })) },
-          { distanceMs: LOOKAHEAD_MS, notes: [64].map((midi) => ({ midi, velocity: 100 })) },
-        ],
-        'parliament',
-        true,
-      );
-
-      const hitLineY = 1000 * 0.85;
-      expect(container.children[1]!.y).toBeLessThan(hitLineY - 1);
-    });
-
-    it('hard-resets (does not carry over) continuity when the previous snapshot had no second chord', () => {
-      const container = new FakeContainer();
-      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
-      renderer.showUpcoming([{ distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', false); // only one chord left
-      renderer.tick(300);
-
-      // continuedFromPreviousTap: true, but there was no upcoming[1] to rebase from — must not throw
-      // or produce garbage math, just behave like a normal fresh snapshot.
-      expect(() =>
-        renderer.showUpcoming([{ distanceMs: LOOKAHEAD_MS, notes: [64].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', true),
-      ).not.toThrow();
-
-      const hitLineY = 1000 * 0.85;
-      expect(container.children[0]!.y).toBeLessThan(hitLineY - 1); // rendered far, not snapped to the hit line
+      expect(container.children[0]!.y).toBeCloseTo(1000 * 0.85); // snapped straight to its new position
     });
   });
 });

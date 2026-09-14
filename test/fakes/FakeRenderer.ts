@@ -20,16 +20,14 @@ export class FakeRenderer implements Renderer {
   lastResize: Size | undefined;
   lastUpcoming: readonly UpcomingChordPreview[] = [];
   lastUpcomingColorTheme: ColorTheme | undefined;
-  lastUpcomingContinuedFromPreviousTap: boolean | undefined;
 
   spawnNoteVisual(midi: MidiNote, velocity: Velocity, colorTheme: ColorTheme): void {
     this.spawnedVisuals.push({ midi, velocity, colorTheme });
   }
 
-  showUpcoming(chords: readonly UpcomingChordPreview[], colorTheme: ColorTheme, continuedFromPreviousTap: boolean): void {
+  showUpcoming(chords: readonly UpcomingChordPreview[], colorTheme: ColorTheme): void {
     this.lastUpcoming = chords;
     this.lastUpcomingColorTheme = colorTheme;
-    this.lastUpcomingContinuedFromPreviousTap = continuedFromPreviousTap;
   }
 
   tick(deltaMs: number): void {

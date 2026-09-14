@@ -79,7 +79,6 @@ export interface NoteVisualContainer {
 export class PixiRenderer implements Renderer {
   private readonly particles: TrackedParticle[] = [];
   private upcoming: TrackedUpcomingChord[] = [];
-  private upcomingElapsedMs = 0;
 
   constructor(
     private readonly container: NoteVisualContainer,
@@ -97,15 +96,15 @@ export class PixiRenderer implements Renderer {
     this.particles.push({ graphic, midi, elapsedMs: 0 });
   }
 
-  showUpcoming(chords: readonly UpcomingChordPreview[], colorTheme: ColorTheme, continuedFromPreviousTap: boolean): void {
-    // Rebase the fall clock instead of resetting it: what's about to become the new `upcoming[0]`
-    // was `upcoming[1]` a moment ago, already falling toward its own due time. Resetting elapsed to
-    // 0 unconditionally would snap it straight to its resting position — a visible jump — instead of
-    // letting it continue from wherever it actually was. `continuedFromPreviousTap` is false for a
-    // genuinely discontinuous jump (seek, restart, or the very first snapshot), where a hard reset
-    // to 0 is exactly right.
-    const previousNextDistanceMs = this.upcoming[1]?.distanceMs;
-
+  /**
+   * Rebuilds the upcoming lane from a fresh snapshot. Every dot is positioned directly from its
+   * own `distanceMs` (see `positionUpcoming`) — a static step-ladder, not a continuous real-time
+   * fall. Only the very next chord (`distanceMs === 0`) sits at the hit line; everything else
+   * stays exactly where its own distance puts it until the player's next tap calls this again —
+   * nothing "creeps" toward the hit line while waiting, which is what made an unplayed second
+   * note look like it had also become due.
+   */
+  showUpcoming(chords: readonly UpcomingChordPreview[], colorTheme: ColorTheme): void {
     for (const tracked of this.upcoming) {
       for (const dot of tracked.dots) {
         this.container.removeChild(dot);
@@ -113,10 +112,6 @@ export class PixiRenderer implements Renderer {
       }
     }
 
-    this.upcomingElapsedMs =
-      continuedFromPreviousTap && previousNextDistanceMs !== undefined
-        ? this.upcomingElapsedMs - previousNextDistanceMs
-        : 0;
     this.upcoming = chords.map((chord, index) => {
       // Odd chords (the "in-between" tap relative to the one before) get lightened, so
       // consecutive taps read apart even when they share a pitch.
@@ -144,6 +139,8 @@ export class PixiRenderer implements Renderer {
     this.positionUpcoming();
   }
 
+  /** Advances hit-particle animation only — the upcoming lane is static (see `showUpcoming`) and
+   *  has nothing here to advance; waiting never moves an unplayed note. */
   tick(deltaMs: number): void {
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const particle = this.particles[i];
@@ -158,26 +155,6 @@ export class PixiRenderer implements Renderer {
         this.particles.splice(i, 1);
       }
     }
-
-    // `upcoming[1]` (the chord after the immediate next one) is what the freeze anchors on, not
-    // `upcoming[0]` — that one is always already at `distanceMs === 0` by construction (it's the
-    // next tap's target), so anchoring on it would freeze on the very first frame and kill the
-    // animation outright. This game advances by tap, not by clock, so once `upcoming[1]` finishes
-    // falling to the hit line, further real time must not keep dragging the chords behind it
-    // forward too — the clock freezes there, holding the whole lane in place.
-    //
-    // Clamped HERE, at the source, rather than only where it's read for positioning: if the raw
-    // value kept growing unbounded while frozen, a long wait before the next tap would leave it
-    // holding a huge stale number. `showUpcoming()`'s continuity rebase (see there) subtracts
-    // `upcoming[1]`'s distance from whatever this holds — fed that huge stale number instead of the
-    // true frozen one, it would corrupt the next batch of chords' distances, snapping them straight
-    // to the hit line instead of letting them fall in from the top.
-    const freezeAtMs = this.upcoming[1]?.distanceMs;
-    this.upcomingElapsedMs =
-      freezeAtMs === undefined
-        ? this.upcomingElapsedMs + deltaMs
-        : Math.min(this.upcomingElapsedMs + deltaMs, freezeAtMs);
-    this.positionUpcoming();
   }
 
   resize(width: number, height: number): void {
@@ -211,20 +188,16 @@ export class PixiRenderer implements Renderer {
   }
 
   /**
-   * Repositions every tracked upcoming chord from its snapshot `distanceMs` minus how much real
-   * time has elapsed since that snapshot (`upcomingElapsedMs`, already frozen by `tick()` once it
-   * hits the lane's freeze point — see there) — this is the smooth fall: a chord due in 2000ms
-   * visibly glides down over the next 2 real seconds, landing on the hit line exactly when it's due.
-   *
-   * `upcoming[0]` is always the chord the *next* tap will fire, so it's always already at
-   * `distanceMs === 0` — pinned at the hit line, nothing to animate there. `upcoming[1]` is the one
-   * after that: the interesting one, since it's what the falling motion is actually illustrating
-   * ("this is how long you'd wait before the tap after next").
+   * Positions every tracked upcoming chord directly from its own snapshot `distanceMs` — a static
+   * step-ladder, not a real-time animation. `upcoming[0]` is always the chord the *next* tap will
+   * fire, so it's always already at `distanceMs === 0`, pinned at the hit line; everything else
+   * sits at whatever height its own distance implies and stays there — motionless — until the
+   * player's next tap calls `showUpcoming` again with a fresh snapshot. Nothing here ever "creeps"
+   * toward the hit line while the player is deciding when to tap.
    */
   private positionUpcoming(): void {
     for (const tracked of this.upcoming) {
-      const remainingMs = tracked.distanceMs - this.upcomingElapsedMs;
-      const y = this.yForDistance(this.lookaheadMs > 0 ? remainingMs / this.lookaheadMs : 0);
+      const y = this.yForDistance(this.lookaheadMs > 0 ? tracked.distanceMs / this.lookaheadMs : 0);
       for (const dot of tracked.dots) dot.y = y;
     }
   }

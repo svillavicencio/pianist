@@ -13,20 +13,15 @@ export interface Renderer {
   /**
    * Replaces the "upcoming notes" preview lane with `chords`, touchpianist's falling-dots rhythm
    * cue. Chords stay grouped (not flattened) so an implementation can render "these notes are one
-   * chord" (e.g. same color, connected) distinctly from "these are separate consecutive taps"
-   * (e.g. alternating colors). Each chord's `distanceMs` is a snapshot taken now — an implementation
-   * is expected to animate it ticking down in real time (via `tick`) so the notes visibly fall at
-   * the piece's authored pace, not just jump between static positions. Call again after every
-   * cursor move (trigger, seek, restart) to re-snapshot from the new position.
-   *
-   * `continuedFromPreviousTap` says whether this snapshot follows a normal single-chord advance
-   * (the player tapped) — pass `true` there so the fall keeps flowing uninterrupted from wherever
-   * it visually was, rather than snapping whatever's now next straight to its resting position.
-   * Pass `false` for a genuinely discontinuous cursor move (seek, restart, or the very first
-   * snapshot of a piece), where jumping straight to the new position is exactly what should happen.
+   * chord" (e.g. clustered together) distinctly from "these are separate consecutive taps" (e.g.
+   * alternating colors). Each chord's `distanceMs` places it directly — a static step-ladder, not
+   * a real-time animation: only the very next chord (`distanceMs === 0`) sits at the hit line,
+   * every other one sits motionless at its own implied position until this is called again. Call
+   * again after every cursor move (trigger, seek, restart) to re-snapshot from the new position.
    */
-  showUpcoming(chords: readonly UpcomingChordPreview[], colorTheme: ColorTheme, continuedFromPreviousTap: boolean): void;
-  /** Advance any running animations (hit particles, and the upcoming-notes fall) by `deltaMs`. Called once per frame regardless of input. */
+  showUpcoming(chords: readonly UpcomingChordPreview[], colorTheme: ColorTheme): void;
+  /** Advance any running animations (currently just hit particles — the upcoming lane is static)
+   *  by `deltaMs`. Called once per frame regardless of input. */
   tick(deltaMs: number): void;
   /** React to a viewport size change. */
   resize(width: number, height: number): void;

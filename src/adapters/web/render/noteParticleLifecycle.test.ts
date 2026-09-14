@@ -118,19 +118,25 @@ describe('shiftLightness', () => {
 
 describe('radiusForVelocity', () => {
   it('scales toward the minimum at velocity 0', () => {
-    expect(radiusForVelocity(20, 0)).toBeCloseTo(20 * 0.7);
+    expect(radiusForVelocity(20, 0)).toBeCloseTo(20 * 0.55);
   });
 
   it('scales toward the maximum at the highest MIDI velocity (127)', () => {
-    expect(radiusForVelocity(20, 127)).toBeCloseTo(20 * 1.3);
+    expect(radiusForVelocity(20, 127)).toBeCloseTo(20 * 1.6);
   });
 
-  it('is close to the unscaled base radius at the midpoint velocity', () => {
-    expect(radiusForVelocity(20, 63.5)).toBeCloseTo(20, 0);
+  it('sits at the midpoint scale at the midpoint velocity', () => {
+    expect(radiusForVelocity(20, 63.5)).toBeCloseTo(20 * ((0.55 + 1.6) / 2), 1);
   });
 
   it('clamps an out-of-range velocity instead of extrapolating', () => {
-    expect(radiusForVelocity(20, 200)).toBeCloseTo(20 * 1.3);
-    expect(radiusForVelocity(20, -10)).toBeCloseTo(20 * 0.7);
+    expect(radiusForVelocity(20, 200)).toBeCloseTo(20 * 1.6);
+    expect(radiusForVelocity(20, -10)).toBeCloseTo(20 * 0.55);
+  });
+
+  it('scales the loudest note noticeably larger than the softest (roughly 3x, not a subtle nudge)', () => {
+    const softest = radiusForVelocity(20, 0);
+    const loudest = radiusForVelocity(20, 127);
+    expect(loudest / softest).toBeGreaterThan(2.5);
   });
 });

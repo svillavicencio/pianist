@@ -184,15 +184,13 @@ async function main(): Promise<void> {
     // Redraws the "falling notes" preview lane from wherever the cursor now sits — called after
     // every cursor move (trigger, seek, restart) so it always shows what's actually coming up next.
     // An arrow function (not a hoisted `function` declaration) so TS keeps `piece` narrowed non-null here.
-    // `continuedFromPreviousTap` must be true only for a normal single-chord advance (a tap) — that's
-    // what lets the renderer keep the fall flowing instead of snapping the new "next" note into place.
-    const refreshUpcoming = (continuedFromPreviousTap: boolean): void => {
+    const refreshUpcoming = (): void => {
       const upcoming = upcomingChordsPreview(
         piece.chords.slice(pieceEngine.currentChordIndex),
         UPCOMING_LOOKAHEAD_MS,
         UPCOMING_MAX_NOTES,
       );
-      renderer.showUpcoming(upcoming, piece.colorTheme, continuedFromPreviousTap);
+      renderer.showUpcoming(upcoming, piece.colorTheme);
     };
 
     // Notes currently sounding from any press that hasn't released yet, in the order they
@@ -224,7 +222,7 @@ async function main(): Promise<void> {
       }
       activePresses.add(id);
       overlay.setProgress(pieceEngine.currentChordIndex, piece.chords.length);
-      refreshUpcoming(true);
+      refreshUpcoming();
     });
 
     const unsubscribeRelease = input.onRelease((id) => {
@@ -249,7 +247,7 @@ async function main(): Promise<void> {
           onRestart(): void {
             pieceEngine.reset();
             overlay.setProgress(pieceEngine.currentChordIndex, piece.chords.length);
-            refreshUpcoming(false);
+            refreshUpcoming();
             pauseHandle?.destroy();
             pauseHandle = undefined;
             paused = false;
@@ -268,11 +266,11 @@ async function main(): Promise<void> {
         if (paused) return;
         pieceEngine.seekTo(Math.round(ratio * piece.chords.length));
         overlay.setProgress(pieceEngine.currentChordIndex, piece.chords.length);
-        refreshUpcoming(false);
+        refreshUpcoming();
       },
     });
     overlay.setProgress(pieceEngine.currentChordIndex, piece.chords.length);
-    refreshUpcoming(false);
+    refreshUpcoming();
   }
 
   showMainMenu();

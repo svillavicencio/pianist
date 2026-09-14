@@ -34,9 +34,11 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /** Radius scale factor at velocity 0 / the highest MIDI velocity (127) — a soft note renders
- *  smaller, a loud note bigger, around the unscaled base radius at the midpoint. */
-const MIN_VELOCITY_SCALE = 0.7;
-const MAX_VELOCITY_SCALE = 1.3;
+ *  smaller, a loud note bigger, around the unscaled base radius at the midpoint. Wide on purpose
+ *  (roughly 3x smallest-to-largest): the original, narrower 0.7-1.3 range read as barely-there
+ *  next to the pitch-color and cluster-jitter noise already on screen. */
+const MIN_VELOCITY_SCALE = 0.55;
+const MAX_VELOCITY_SCALE = 1.6;
 const MAX_MIDI_VELOCITY = 127;
 
 /** Scales `baseRadius` by how hard a note was struck — louder notes render bigger. */
