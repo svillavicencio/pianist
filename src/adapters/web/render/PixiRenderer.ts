@@ -16,6 +16,9 @@ const SPAWN_HEIGHT_FRACTION = 0.85;
 /** Radius (px) of an "upcoming note" preview dot — smaller than a hit particle so the two read as distinct. */
 const UPCOMING_RADIUS_PX = 10;
 
+/** Stroke width (px) of an upcoming-note dot's outline — hollow, unlike a filled hit particle. */
+const UPCOMING_STROKE_WIDTH_PX = 2;
+
 /** Alpha of an "upcoming note" preview dot — dimmer than a hit particle so it reads as "not yet played". */
 const UPCOMING_ALPHA = 0.55;
 
@@ -137,7 +140,7 @@ export class PixiRenderer implements Renderer {
 
       const dots = xs.map((x, i) => {
         const dot = new PIXI.Graphics();
-        dot.circle(0, 0, UPCOMING_RADIUS_PX).fill(colors[i]!);
+        dot.circle(0, 0, UPCOMING_RADIUS_PX).stroke({ width: UPCOMING_STROKE_WIDTH_PX, color: colors[i]! });
         dot.alpha = UPCOMING_ALPHA;
         dot.x = x;
         this.container.addChild(dot);
