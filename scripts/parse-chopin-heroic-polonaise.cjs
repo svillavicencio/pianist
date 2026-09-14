@@ -110,16 +110,34 @@ tracks.forEach((events, index) => {
 console.log(
   `Profile: format=${format} tracks=${trackCount} ppq=${ppq} tempos=${tempos.length}`,
 );
-const noteOns = tracks.flatMap((events, track) =>
+const selectedEvents = tracks.flatMap((events, track) =>
   events
     .filter(
       (event) =>
-        event.type === "noteOn" &&
+        (event.type === "noteOn" || event.type === "noteOff") &&
         SELECTED_TRACKS.includes(track) &&
         SELECTED_CHANNELS.includes(event.channel),
     )
     .map((event) => ({ ...event })),
 );
+const openByKey = new Map();
+const holdDurationMsByNoteOn = new Map();
+for (const event of selectedEvents) {
+  const key = `${event.channel}:${event.note}`;
+  if (event.type === "noteOn") {
+    if (!openByKey.has(key)) openByKey.set(key, []);
+    openByKey.get(key).push(event);
+  } else {
+    const queue = openByKey.get(key);
+    const openEvent = queue?.shift();
+    if (openEvent)
+      holdDurationMsByNoteOn.set(
+        openEvent,
+        Math.round(tickToMs(event.tick) - tickToMs(openEvent.tick)),
+      );
+  }
+}
+const noteOns = selectedEvents.filter((event) => event.type === "noteOn");
 if (noteOns.length !== 6052)
   throw new Error(`selected note count mismatch: ${noteOns.length}`);
 const byTick = new Map();
@@ -127,11 +145,14 @@ let collisions = 0;
 for (const event of noteOns) {
   let pitches = byTick.get(event.tick);
   if (!pitches) byTick.set(event.tick, (pitches = new Map()));
-  if (pitches.has(event.note)) collisions++;
-  pitches.set(
-    event.note,
-    Math.max(pitches.get(event.note) ?? 0, event.velocity),
-  );
+  const holdDurationMs = holdDurationMsByNoteOn.get(event);
+  if (pitches.has(event.note)) {
+    collisions++;
+    pitches.set(event.note, {
+      velocity: Math.max(pitches.get(event.note).velocity, event.velocity),
+      holdDurationMs,
+    });
+  } else pitches.set(event.note, { velocity: event.velocity, holdDurationMs });
 }
 const chords = [...byTick.entries()]
   .sort((a, b) => a[0] - b[0])
@@ -139,7 +160,11 @@ const chords = [...byTick.entries()]
     originalTimeMs: tickToMs(tick),
     notes: [...pitches]
       .sort((a, b) => a[0] - b[0])
-      .map(([midi, velocity]) => ({ midi, velocity })),
+      .map(([midi, { velocity, holdDurationMs }]) => ({
+        midi,
+        velocity,
+        holdDurationMs,
+      })),
   }));
 const velocities = new Set(
   chords.flatMap((chord) => chord.notes.map((note) => note.velocity)),
@@ -159,22 +184,56 @@ if (
   throw new Error("derived source profile mismatch");
 function formatRawEvents(events) {
   const lines = [
-    "const RAW_EVENTS: readonly [number, readonly [number, number][]][] = [",
+    "const RAW_EVENTS: readonly (readonly [",
+    "  number,",
+    "  readonly (readonly [number, number, number | undefined])[],",
+    "])[] = [",
   ];
   for (const [time, notes] of events) {
     if (notes.length === 1) {
-      lines.push(`  [${time}, [[${notes[0][0]}, ${notes[0][1]}]]],`);
+      lines.push(
+        `  [${time}, [[${notes[0][0]}, ${notes[0][1]}, ${notes[0][2] ?? "undefined"}]]],`,
+      );
       continue;
     }
     lines.push("  [", `    ${time},`, "    [");
-    for (const [midi, velocity] of notes)
-      lines.push(`      [${midi}, ${velocity}],`);
+    for (const [midi, velocity, holdDurationMs] of notes)
+      lines.push(`      [${midi}, ${velocity}, ${holdDurationMs ?? "undefined"}],`);
     lines.push("    ],", "  ],");
   }
   lines.push("];", "");
   return lines.join("\n");
 }
-const output = `import type { Chord, Piece } from "../../domain/types";\n\n/** Chopin: Polonaise in A-flat major, Op. 53 (Heroic Polonaise), from a verified piano-midi.de performance MIDI. */\n${formatRawEvents(chords.map((chord) => [chord.originalTimeMs, chord.notes.map((note) => [note.midi, note.velocity])]))}\nconst chords: readonly Chord[] = RAW_EVENTS.map(\n  ([originalTimeMs, notes], index) => {\n    const next = RAW_EVENTS[index + 1];\n    return {\n      originalTimeMs,\n      screenDurationMs: next ? next[0] - originalTimeMs : 0,\n      notes: notes.map(([midi, velocity]) => ({ midi, velocity })),\n    };\n  },\n);\n\nexport const chopinHeroicPolonaisePiece: Piece = {\n  dataName: "chopin_heroic_polonaise_op53",\n  displayName: "Polonaise in A-flat major, Op. 53 (Heroic Polonaise)",\n  colorTheme: "crimson",\n  numScreens: chords.length,\n  chords,\n};\n`;
+const rawEvents = chords.map((chord) => [
+  chord.originalTimeMs,
+  chord.notes.map((note) => [note.midi, note.velocity, note.holdDurationMs]),
+]);
+const output = `import type { Chord, Piece } from "../../domain/types";
+
+/** Chopin: Polonaise in A-flat major, Op. 53 (Heroic Polonaise), from a verified piano-midi.de performance MIDI. */
+${formatRawEvents(rawEvents)}const chords: readonly Chord[] = RAW_EVENTS.map(
+  ([originalTimeMs, notes], index) => {
+    const next = RAW_EVENTS[index + 1];
+    return {
+      originalTimeMs,
+      screenDurationMs: next ? next[0] - originalTimeMs : 0,
+      notes: notes.map(([midi, velocity, holdDurationMs]) => ({
+        midi,
+        velocity,
+        holdDurationMs,
+      })),
+    };
+  },
+);
+
+export const chopinHeroicPolonaisePiece: Piece = {
+  dataName: "chopin_heroic_polonaise_op53",
+  displayName: "Polonaise in A-flat major, Op. 53 (Heroic Polonaise)",
+  colorTheme: "crimson",
+  numScreens: chords.length,
+  chords,
+};
+`;
 fs.writeFileSync(
   path.resolve(__dirname, "../src/content/pieces/chopinHeroicPolonaise.ts"),
   output,
