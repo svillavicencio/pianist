@@ -559,5 +559,53 @@ describe('PixiRenderer', () => {
       expect(container.children[0]!.y).toBeCloseTo(expectedFreshFromY);
       expect(container.children[0]!.y).not.toBeCloseTo(secondDotYBeforeReset, 0);
     });
+
+    it("glides a carried-over chord over how long the player actually just took, not an unrelated authored gap (fixes the 'too aggressive' speed)", () => {
+      const container = new FakeContainer();
+      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
+      renderer.showUpcoming(
+        [
+          { distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) },
+          // A tiny 50ms authored gap — under the old (buggy) formula this alone would have
+          // clamped the *next* chord's carried-over glide to the 80ms floor, regardless of how
+          // long the player actually took to tap.
+          { distanceMs: 50, notes: [62].map((midi) => ({ midi, velocity: 100 })) },
+        ],
+        'parliament',
+        FRESH,
+      );
+
+      renderer.tick(500); // the player actually takes half a second before tapping
+      renderer.showUpcoming([{ distanceMs: 0, notes: [62].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', ADVANCED_BY_TAP);
+
+      const hitLineY = 1000 * 0.85;
+      renderer.tick(200); // only 200 of the real ~500ms glide has elapsed
+      // Under the old formula (duration clamped from the unrelated 50ms authored gap to the 80ms
+      // floor), this would already be fully settled at the hit line by now — that's the "rushed"
+      // bug. The fix keeps it visibly still gliding.
+      expect(container.children[0]!.y).toBeLessThan(hitLineY - 5);
+
+      renderer.tick(300); // total 500ms since the tap — now the glide should be complete
+      expect(container.children[0]!.y).toBeCloseTo(hitLineY);
+    });
+
+    it('clamps a carried-over glide to the same maximum as any other transition, even after a very long pause', () => {
+      const container = new FakeContainer();
+      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
+      renderer.showUpcoming(
+        [
+          { distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) },
+          { distanceMs: 3000, notes: [62].map((midi) => ({ midi, velocity: 100 })) },
+        ],
+        'parliament',
+        FRESH,
+      );
+
+      renderer.tick(10_000); // the player takes 10 real seconds before tapping
+      renderer.showUpcoming([{ distanceMs: 0, notes: [62].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', ADVANCED_BY_TAP);
+
+      renderer.tick(900); // the shared transition ceiling — must be fully settled by exactly here
+      expect(container.children[0]!.y).toBeCloseTo(1000 * 0.85);
+    });
   });
 });

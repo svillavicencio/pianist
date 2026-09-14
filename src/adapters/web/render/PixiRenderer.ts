@@ -31,16 +31,17 @@ const UPCOMING_ALT_LIGHTNESS_SHIFT = 0.3;
  *  chord does in touchpianist/Piano-Flow, rather than as separate notes. */
 const CLUSTER_JITTER_STEP_PX = 8;
 
-/** Bounds (ms) for how long a dot takes to glide to its resting position — whether it's a brand
- *  new chord entering the lane, or one that was already visible sliding to its updated spot after
- *  a tap. Drawn from the chord's own gap since the previous one in the passage (clamped to these
- *  bounds), so a fast trill settles almost instantly while a genuinely slow passage (a held whole
- *  note, a fermata) eases in visibly over most of a second. Once `elapsedMs` reaches this, `tick()`
- *  stops touching the dot — it holds its resting position indefinitely, no matter how long the
- *  player waits, until the next `showUpcoming` call gives it a new target. That's the piece this
- *  session's real-time-clock attempt got wrong: a chord the player hasn't reached yet must NEVER
- *  approach the hit line on its own just because time passes — only an actual tap (a fresh
- *  snapshot) may move its target. */
+/** Bounds (ms) for how long a dot takes to glide to its resting position. A *brand-new* chord's
+ *  duration is drawn from its own gap since the previous chord in the passage; a chord that was
+ *  *already visible* instead uses how much real time actually just elapsed since the last
+ *  `showUpcoming` call (see `msSinceLastShow`) — either way, clamped to these bounds, so a fast
+ *  trill settles almost instantly while a genuinely slow passage (a held whole note, a fermata, or
+ *  just a player taking their time) eases in visibly over most of a second, never snapping. Once
+ *  `elapsedMs` reaches this, `tick()` stops touching the dot — it holds its resting position
+ *  indefinitely, no matter how long the player waits, until the next `showUpcoming` call gives it
+ *  a new target. That's the piece this session's real-time-clock attempt got wrong: a chord the
+ *  player hasn't reached yet must NEVER approach the hit line on its own just because time passes
+ *  — only an actual tap (a fresh snapshot) may move its target. */
 const TRANSITION_MIN_MS = 80;
 const TRANSITION_MAX_MS = 900;
 
@@ -105,6 +106,15 @@ export interface NoteVisualContainer {
 export class PixiRenderer implements Renderer {
   private readonly particles: TrackedParticle[] = [];
   private upcoming: TrackedUpcomingChord[] = [];
+  /** Real ms elapsed since the last `showUpcoming` call — advanced by every `tick()`, reset to 0
+   *  at the end of every `showUpcoming`. Used only as the glide duration for a chord carried over
+   *  from a tap (see `showUpcoming`): that duration must reflect how long the player actually just
+   *  took, not an unrelated chord's own authored spacing — otherwise a dense, fast piece (where
+   *  that unrelated gap is always near the floor) looks rushed no matter how the player is
+   *  actually playing. This never drives an ongoing position on its own (unlike the reverted
+   *  real-time-clock attempt) — it's read once per `showUpcoming` call to size one bounded,
+   *  self-terminating transition, exactly like every other duration in this class. */
+  private msSinceLastShow = 0;
 
   constructor(
     private readonly container: NoteVisualContainer,
@@ -153,23 +163,24 @@ export class PixiRenderer implements Renderer {
       const radii = chord.notes.map((note) => radiusForVelocity(UPCOMING_RADIUS_PX, note.velocity));
       const toY = this.yForDistance(this.lookaheadMs > 0 ? chord.distanceMs / this.lookaheadMs : 0);
 
-      // The gap (ms) since the previous chord in this snapshot — this chord's own authored pace —
-      // clamped into the transition-duration bounds. `chords[index - 1]` is undefined for the
-      // first chord, whose own `distanceMs` is always 0, so this correctly falls back to the
-      // fastest bound.
-      const previousDistanceMs = chords[index - 1]?.distanceMs ?? 0;
-      const durationMs = Math.min(
-        TRANSITION_MAX_MS,
-        Math.max(TRANSITION_MIN_MS, chord.distanceMs - previousDistanceMs),
-      );
-
       const carriedOver = advancedByTap ? previous[index + 1] : undefined;
       let fromY: number;
+      let durationMs: number;
       if (carriedOver) {
         // Same chord, still falling (or already settled) from before this call — pick up exactly
-        // where it visually is, so the tap that triggered this call produces no visible jump.
+        // where it visually is, so the tap that triggered this call produces no visible jump. Its
+        // glide takes as long as the player actually just took (clamped), which is what keeps the
+        // fall speed tied to the piece's real tempo instead of an authored gap that has nothing to
+        // do with this chord or this moment — see `msSinceLastShow`.
         fromY = carriedOver.dots[0]?.y ?? toY;
+        durationMs = Math.min(TRANSITION_MAX_MS, Math.max(TRANSITION_MIN_MS, this.msSinceLastShow));
       } else {
+        // A brand-new chord has no "real elapsed time" to draw from, so its pace instead comes
+        // from its own gap since the previous chord in this snapshot — this chord's own authored
+        // spacing. `chords[index - 1]` is undefined for the first chord, whose own `distanceMs` is
+        // always 0, so this correctly falls back to the fastest bound.
+        const previousDistanceMs = chords[index - 1]?.distanceMs ?? 0;
+        durationMs = Math.min(TRANSITION_MAX_MS, Math.max(TRANSITION_MIN_MS, chord.distanceMs - previousDistanceMs));
         // How far into the duration's own range this chord sits (0 at the fastest bound, 1 at the
         // slowest) — reused to scale the rise distance the same way, so a slow entrance isn't just
         // longer, it visibly travels further too.
@@ -200,12 +211,16 @@ export class PixiRenderer implements Renderer {
         dot.destroy();
       }
     }
+
+    this.msSinceLastShow = 0;
   }
 
   /** Advances hit-particle animation, plus any upcoming dots still mid-transition (see
    *  `TRANSITION_MIN_MS`) — every other upcoming dot is already settled and untouched here;
    *  waiting never moves a note past its own resting position. */
   tick(deltaMs: number): void {
+    this.msSinceLastShow += deltaMs;
+
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const particle = this.particles[i];
       if (!particle) continue;
