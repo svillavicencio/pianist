@@ -20,7 +20,7 @@ describe('upcomingChordsPreview', () => {
 
     const result = upcomingChordsPreview(chords, 3000);
 
-    expect(result).toEqual([{ distanceMs: 0, midis: [60] }]);
+    expect(result).toEqual([{ distanceMs: 0, notes: [{ midi: 60, velocity: 60 }] }]);
   });
 
   it('keeps every note of a chord grouped together, not flattened', () => {
@@ -28,7 +28,16 @@ describe('upcomingChordsPreview', () => {
 
     const result = upcomingChordsPreview(chords, 3000);
 
-    expect(result).toEqual([{ distanceMs: 0, midis: [60, 64, 67] }]);
+    expect(result).toEqual([
+      {
+        distanceMs: 0,
+        notes: [
+          { midi: 60, velocity: 60 },
+          { midi: 64, velocity: 60 },
+          { midi: 67, velocity: 60 },
+        ],
+      },
+    ]);
   });
 
   it('accumulates raw screenDurationMs across chords, unnormalized', () => {
@@ -37,9 +46,9 @@ describe('upcomingChordsPreview', () => {
     const result = upcomingChordsPreview(chords, 2000);
 
     expect(result).toEqual([
-      { distanceMs: 0, midis: [60] },
-      { distanceMs: 1000, midis: [62] },
-      { distanceMs: 2000, midis: [64] },
+      { distanceMs: 0, notes: [{ midi: 60, velocity: 60 }] },
+      { distanceMs: 1000, notes: [{ midi: 62, velocity: 60 }] },
+      { distanceMs: 2000, notes: [{ midi: 64, velocity: 60 }] },
     ]);
   });
 
@@ -49,8 +58,8 @@ describe('upcomingChordsPreview', () => {
     const result = upcomingChordsPreview(chords, 1500);
 
     expect(result).toEqual([
-      { distanceMs: 0, midis: [60] },
-      { distanceMs: 1000, midis: [62] },
+      { distanceMs: 0, notes: [{ midi: 60, velocity: 60 }] },
+      { distanceMs: 1000, notes: [{ midi: 62, velocity: 60 }] },
     ]);
   });
 
@@ -59,7 +68,16 @@ describe('upcomingChordsPreview', () => {
 
     const result = upcomingChordsPreview(chords, 5000, 3);
 
-    expect(result).toEqual([{ distanceMs: 0, midis: [60, 61, 62] }]);
+    expect(result).toEqual([
+      {
+        distanceMs: 0,
+        notes: [
+          { midi: 60, velocity: 60 },
+          { midi: 61, velocity: 60 },
+          { midi: 62, velocity: 60 },
+        ],
+      },
+    ]);
   });
 
   it('includes a chord that lands exactly on the window edge', () => {
@@ -68,8 +86,28 @@ describe('upcomingChordsPreview', () => {
     const result = upcomingChordsPreview(chords, 1000);
 
     expect(result).toEqual([
-      { distanceMs: 0, midis: [60] },
-      { distanceMs: 1000, midis: [62] },
+      { distanceMs: 0, notes: [{ midi: 60, velocity: 60 }] },
+      { distanceMs: 1000, notes: [{ midi: 62, velocity: 60 }] },
     ]);
+  });
+
+  it('carries velocity and holdDurationMs through per note', () => {
+    const chords: readonly Chord[] = [
+      { originalTimeMs: 0, screenDurationMs: 100, notes: [{ midi: 60, velocity: 80, holdDurationMs: 400 }] },
+    ];
+
+    const result = upcomingChordsPreview(chords, 1000);
+
+    expect(result[0]?.notes).toEqual([{ midi: 60, velocity: 80, holdDurationMs: 400 }]);
+  });
+
+  it('carries an undefined holdDurationMs through unchanged (not yet regenerated content)', () => {
+    const chords: readonly Chord[] = [
+      { originalTimeMs: 0, screenDurationMs: 100, notes: [{ midi: 60, velocity: 80 }] },
+    ];
+
+    const result = upcomingChordsPreview(chords, 1000);
+
+    expect(result[0]?.notes[0]?.holdDurationMs).toBeUndefined();
   });
 });

@@ -8,6 +8,9 @@ export type Velocity = number;
 export interface NoteEvent {
   readonly midi: MidiNote;
   readonly velocity: Velocity;
+  /** How long (ms) this note was actually held in the source performance — undefined for
+   *  content not yet regenerated with real noteOff data (see Phase B of this plan). */
+  readonly holdDurationMs?: number;
 }
 
 /** A group of notes meant to sound together, as authored in the original piece's timeline. */

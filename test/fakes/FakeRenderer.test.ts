@@ -31,10 +31,16 @@ describe('FakeRenderer', () => {
 
   it('remembers the most recent upcoming-chords preview', () => {
     const renderer = new FakeRenderer();
-    renderer.showUpcoming([{ distanceMs: 0, midis: [60] }], 'parliament', false);
-    renderer.showUpcoming([{ distanceMs: 500, midis: [64, 67] }], 'parliament', true);
+    renderer.showUpcoming([{ distanceMs: 0, notes: [{ midi: 60, velocity: 100 }] }], 'parliament', false);
+    renderer.showUpcoming(
+      [{ distanceMs: 500, notes: [{ midi: 64, velocity: 100 }, { midi: 67, velocity: 100 }] }],
+      'parliament',
+      true,
+    );
 
-    expect(renderer.lastUpcoming).toEqual([{ distanceMs: 500, midis: [64, 67] }]);
+    expect(renderer.lastUpcoming).toEqual([
+      { distanceMs: 500, notes: [{ midi: 64, velocity: 100 }, { midi: 67, velocity: 100 }] },
+    ]);
     expect(renderer.lastUpcomingContinuedFromPreviousTap).toBe(true);
   });
 });

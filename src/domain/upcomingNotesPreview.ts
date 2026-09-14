@@ -1,11 +1,11 @@
-import type { Chord, MidiNote } from './types';
+import type { Chord, MidiNote, Velocity } from './types';
 
 /** One upcoming chord to preview: every note in it sounds on the same tap. */
 export interface UpcomingChordPreview {
   /** Milliseconds from "next up" (0) until this chord is due, per the piece's authored rhythm. */
   readonly distanceMs: number;
   /** Every note that fires together on this chord's tap — 2+ means "press these together". */
-  readonly midis: readonly MidiNote[];
+  readonly notes: readonly { readonly midi: MidiNote; readonly velocity: Velocity; readonly holdDurationMs?: number }[];
 }
 
 /** Hard ceiling on notes returned, so a dense trill passage can never flood the preview lane. */
@@ -44,9 +44,13 @@ export function upcomingChordsPreview(
     if (cumulativeMs > windowMs) break;
     if (notesSoFar >= maxNotes) break;
 
-    const midis = chord.notes.slice(0, maxNotes - notesSoFar).map((note) => note.midi);
-    result.push({ distanceMs: cumulativeMs, midis });
-    notesSoFar += midis.length;
+    const notes = chord.notes.slice(0, maxNotes - notesSoFar).map((note) => ({
+      midi: note.midi,
+      velocity: note.velocity,
+      holdDurationMs: note.holdDurationMs,
+    }));
+    result.push({ distanceMs: cumulativeMs, notes });
+    notesSoFar += notes.length;
 
     cumulativeMs += chord.screenDurationMs;
   }

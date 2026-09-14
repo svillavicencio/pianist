@@ -121,15 +121,17 @@ export class PixiRenderer implements Renderer {
       // Odd chords (the "in-between" tap relative to the one before) get lightened, so
       // consecutive taps read apart even when they share a pitch.
       const isAlternate = index % 2 === 1;
-      const xs = this.xsForChord(chord.midis);
-      const colors = chord.midis.map((midi) => {
+      const midis = chord.notes.map((note) => note.midi);
+      const xs = this.xsForChord(midis);
+      const colors = midis.map((midi) => {
         const base = colorForNote(colorTheme, midi);
         return isAlternate ? shiftLightness(base, UPCOMING_ALT_LIGHTNESS_SHIFT) : base;
       });
+      const radii = chord.notes.map((note) => radiusForVelocity(UPCOMING_RADIUS_PX, note.velocity));
 
       const dots = xs.map((x, i) => {
         const dot = new PIXI.Graphics();
-        dot.circle(0, 0, UPCOMING_RADIUS_PX).fill(colors[i]!);
+        dot.circle(0, 0, radii[i]!).fill(colors[i]!);
         dot.alpha = UPCOMING_ALPHA;
         dot.x = x;
         this.container.addChild(dot);
