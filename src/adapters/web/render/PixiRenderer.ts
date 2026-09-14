@@ -2,11 +2,7 @@ import * as PIXI from 'pixi.js';
 import type { Renderer } from '../../../ports/Renderer';
 import type { ColorTheme, MidiNote } from '../../../domain/types';
 import type { UpcomingChordPreview } from '../../../domain/upcomingNotesPreview';
-import { colorThemeToHex, darkenHex, particleStateAt } from './noteParticleLifecycle';
-
-/** Lowest/highest MIDI notes on a standard 88-key piano — used to map a note to a horizontal position. */
-const MIN_MIDI = 21;
-const MAX_MIDI = 108;
+import { MAX_MIDI, MIN_MIDI, colorForNote, particleStateAt, shiftLightness } from './noteParticleLifecycle';
 
 /** How long (ms) a spawned note visual lives before it's removed; matches PARTICLE lifecycle tuning. */
 const PARTICLE_LIFETIME_MS = 800;

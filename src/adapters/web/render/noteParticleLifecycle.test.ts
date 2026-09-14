@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { colorThemeToHex, darkenHex, particleStateAt } from './noteParticleLifecycle';
+import { colorForNote, MAX_MIDI, MIN_MIDI, particleStateAt, shiftLightness } from './noteParticleLifecycle';
 
 describe('particleStateAt', () => {
   it('starts small, fully opaque, and alive at t=0', () => {
@@ -45,37 +45,58 @@ describe('particleStateAt', () => {
   });
 });
 
-describe('colorThemeToHex', () => {
-  it('maps a known theme to its documented hex color', () => {
-    expect(colorThemeToHex('parliament')).toBe(0xffd700);
+describe('colorForNote', () => {
+  it('produces different colors for different pitches within the same theme', () => {
+    const low = colorForNote('parliament', 30);
+    const mid = colorForNote('parliament', 64);
+    const high = colorForNote('parliament', 100);
+    expect(low).not.toBe(mid);
+    expect(mid).not.toBe(high);
+    expect(low).not.toBe(high);
   });
 
-  it('falls back to white for an unknown theme instead of throwing', () => {
-    expect(colorThemeToHex('some-made-up-theme')).toBe(0xffffff);
+  it('is deterministic: the same theme and pitch always produce the same color', () => {
+    expect(colorForNote('ocean', 60)).toBe(colorForNote('ocean', 60));
+  });
+
+  it('falls back to a neutral color for an unknown theme instead of throwing', () => {
+    expect(() => colorForNote('some-made-up-theme', 60)).not.toThrow();
+  });
+
+  it('clamps a below-range MIDI value to the same color as the lowest key', () => {
+    expect(colorForNote('ocean', 0)).toBe(colorForNote('ocean', MIN_MIDI));
+  });
+
+  it('clamps an above-range MIDI value to the same color as the highest key', () => {
+    expect(colorForNote('ocean', 200)).toBe(colorForNote('ocean', MAX_MIDI));
   });
 });
 
-describe('darkenHex', () => {
+describe('shiftLightness', () => {
   it('returns the same color unchanged at amount 0', () => {
-    expect(darkenHex(0x1e90ff, 0)).toBe(0x1e90ff);
+    expect(shiftLightness(0x1e90ff, 0)).toBe(0x1e90ff);
   });
 
-  it('returns pure black at amount 1, regardless of the input color', () => {
-    expect(darkenHex(0x1e90ff, 1)).toBe(0x000000);
-    expect(darkenHex(0xffffff, 1)).toBe(0x000000);
+  it('returns pure white at amount 1, regardless of the input color', () => {
+    expect(shiftLightness(0x1e90ff, 1)).toBe(0xffffff);
   });
 
-  it('mixes each channel proportionally toward black', () => {
-    // 0x808080 (128,128,128) halfway to black (0,0,0) -> 64 per channel
-    expect(darkenHex(0x808080, 0.5)).toBe(0x404040);
+  it('returns pure black at amount -1, regardless of the input color', () => {
+    expect(shiftLightness(0x1e90ff, -1)).toBe(0x000000);
+  });
+
+  it('mixes each channel proportionally toward white for a positive amount', () => {
+    // 0x808080 (128,128,128) halfway to white -> 128 + (255-128)*0.5 = 191.5 -> 192
+    expect(shiftLightness(0x808080, 0.5)).toBe(0xc0c0c0);
+  });
+
+  it('mixes each channel proportionally toward black for a negative amount', () => {
+    // 0x808080 halfway to black -> 128 * 0.5 = 64
+    expect(shiftLightness(0x808080, -0.5)).toBe(0x404040);
   });
 
   it('clamps an out-of-range amount instead of over/under-mixing', () => {
-    expect(darkenHex(0x123456, 2)).toBe(0x000000);
-    expect(darkenHex(0x123456, -1)).toBe(0x123456);
-  });
-
-  it('darkens even a fully desaturated (grayscale) color, unlike a hue shift', () => {
-    expect(darkenHex(0xc0c0c0, 0.5)).toBe(0x606060);
+    expect(shiftLightness(0x123456, 2)).toBe(0xffffff);
+    expect(shiftLightness(0x123456, -2)).toBe(0x000000);
   });
 });
