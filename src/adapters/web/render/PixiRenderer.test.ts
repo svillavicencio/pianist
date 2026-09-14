@@ -26,6 +26,18 @@ class FakeContainer implements NoteVisualContainer {
 const LOOKAHEAD_MS = 1000;
 
 describe('PixiRenderer', () => {
+  it('colors a spawned hit particle by its pitch, not a single flat theme color', () => {
+    const container = new FakeContainer();
+    const renderer = new PixiRenderer(container, 800, 600, LOOKAHEAD_MS);
+    const fillSpy = vi.spyOn(PIXI.Graphics.prototype, 'fill');
+
+    renderer.spawnNoteVisual(30, 'ocean');
+    renderer.spawnNoteVisual(100, 'ocean');
+
+    expect(fillSpy.mock.calls[0]?.[0]).not.toBe(fillSpy.mock.calls[1]?.[0]);
+    fillSpy.mockRestore();
+  });
+
   it('adds a graphic to the container when a note is spawned', () => {
     const container = new FakeContainer();
     const renderer = new PixiRenderer(container, 800, 600, LOOKAHEAD_MS);

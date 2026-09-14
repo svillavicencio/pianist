@@ -88,7 +88,7 @@ export class PixiRenderer implements Renderer {
 
   spawnNoteVisual(midi: MidiNote, colorTheme: ColorTheme): void {
     const graphic = new PIXI.Graphics();
-    graphic.circle(0, 0, BASE_RADIUS_PX).fill(colorThemeToHex(colorTheme));
+    graphic.circle(0, 0, BASE_RADIUS_PX).fill(colorForNote(colorTheme, midi));
     graphic.x = this.xForMidi(midi);
     graphic.y = this.height * SPAWN_HEIGHT_FRACTION;
     this.container.addChild(graphic);
