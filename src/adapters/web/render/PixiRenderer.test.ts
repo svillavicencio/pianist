@@ -274,11 +274,14 @@ describe('PixiRenderer', () => {
     });
   });
 
-  describe('falling animation', () => {
-    it('moves an upcoming dot smoothly toward the hit line as tick() advances real time', () => {
+  describe('resting position (static once settled — see "entrance transition" below)', () => {
+    const ENTRANCE_MAX_MS = 320; // must outlast any bounded entrance to reach the true resting position
+
+    it('settles an upcoming dot at its distanceMs-implied position', () => {
       const container = new FakeContainer();
       const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
       renderer.showUpcoming([{ distanceMs: LOOKAHEAD_MS / 2, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
+      renderer.tick(ENTRANCE_MAX_MS);
 
       const hitLineY = 1000 * 0.85;
       const topY = 1000 * 0.15;
@@ -289,23 +292,24 @@ describe('PixiRenderer', () => {
       const container = new FakeContainer();
       const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
       renderer.showUpcoming([{ distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
+      renderer.tick(ENTRANCE_MAX_MS);
 
       expect(container.children[0]!.y).toBeCloseTo(1000 * 0.85);
     });
 
-    it('does not move upcoming dots as tick() advances real time — only a new showUpcoming repositions them', () => {
+    it('does not move a settled dot as tick() keeps advancing — only a new showUpcoming repositions it', () => {
       const container = new FakeContainer();
       const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
       renderer.showUpcoming([{ distanceMs: LOOKAHEAD_MS, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
-      const startY = container.children[0]!.y;
+      renderer.tick(ENTRANCE_MAX_MS); // let it fully settle first
+      const settledY = container.children[0]!.y;
 
-      renderer.tick(LOOKAHEAD_MS / 2);
-      renderer.tick(50_000); // however long the player waits, nothing here should move
+      renderer.tick(50_000); // however long the player waits after that, nothing here should move
 
-      expect(container.children[0]!.y).toBe(startY);
+      expect(container.children[0]!.y).toBe(settledY);
     });
 
-    it('leaves upcoming dots untouched by tick() — no destroy/recreate, only hit particles animate there', () => {
+    it('leaves upcoming dots undestroyed/uncreated by tick() — same graphics throughout, only repositioned', () => {
       const container = new FakeContainer();
       const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
       renderer.showUpcoming([{ distanceMs: LOOKAHEAD_MS, notes: [21, 108].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
@@ -317,7 +321,7 @@ describe('PixiRenderer', () => {
       container.children.forEach((graphic, index) => expect(graphic).toBe(graphicsAfterShow[index]));
     });
 
-    it('keeps every note beyond the first exactly where its own distanceMs puts it — no approach toward the hit line', () => {
+    it('keeps every note beyond the first exactly where its own distanceMs puts it, once settled — no approach toward the hit line', () => {
       const container = new FakeContainer();
       const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
       renderer.showUpcoming(
@@ -327,9 +331,10 @@ describe('PixiRenderer', () => {
         ],
         'parliament',
       );
+      renderer.tick(ENTRANCE_MAX_MS);
       const secondDotY = container.children[1]!.y;
 
-      renderer.tick(399); // right on the verge of the second note becoming due
+      renderer.tick(400); // right up to (and past) when the second note becomes due
 
       const hitLineY = 1000 * 0.85;
       expect(container.children[1]!.y).toBe(secondDotY); // did not creep toward the hit line
@@ -343,8 +348,95 @@ describe('PixiRenderer', () => {
       renderer.tick(1_000_000); // waiting changes nothing now — position is static until the next call
 
       renderer.showUpcoming([{ distanceMs: 0, notes: [62].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
+      renderer.tick(ENTRANCE_MAX_MS);
 
-      expect(container.children[0]!.y).toBeCloseTo(1000 * 0.85); // snapped straight to its new position
+      expect(container.children[0]!.y).toBeCloseTo(1000 * 0.85); // settles at its new position
+    });
+  });
+
+  describe('entrance transition', () => {
+    it('starts a freshly-shown dot above its resting position, not already there', () => {
+      const container = new FakeContainer();
+      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
+
+      renderer.showUpcoming([{ distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
+
+      const hitLineY = 1000 * 0.85;
+      expect(container.children[0]!.y).toBeLessThan(hitLineY); // y grows downward — starts above (smaller y)
+    });
+
+    it('eases down to exactly the resting position by the time its entrance duration elapses', () => {
+      const container = new FakeContainer();
+      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
+      renderer.showUpcoming([{ distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
+
+      renderer.tick(320); // the widest possible entrance bound
+
+      expect(container.children[0]!.y).toBeCloseTo(1000 * 0.85);
+    });
+
+    it('never overshoots past the resting position even long after the entrance would have finished', () => {
+      const container = new FakeContainer();
+      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
+      renderer.showUpcoming([{ distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
+
+      renderer.tick(320);
+      const atSettleY = container.children[0]!.y;
+      renderer.tick(100_000);
+
+      expect(container.children[0]!.y).toBe(atSettleY);
+    });
+
+    it('moves partway toward its resting position mid-entrance, not all at once', () => {
+      const container = new FakeContainer();
+      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
+      // distanceMs of 250 clamps the entrance duration into the middle of its bounds (80-320ms).
+      renderer.showUpcoming([{ distanceMs: 250, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament');
+      const startY = container.children[0]!.y;
+
+      renderer.tick(50); // partway through a ~250ms entrance
+
+      const midY = container.children[0]!.y;
+      const hitLineY = 1000 * 0.85;
+      expect(midY).toBeGreaterThan(startY); // moved down some...
+      expect(midY).toBeLessThan(hitLineY - 5); // ...but nowhere near fully settled yet
+    });
+
+    it('gives a fast passage (small gap since the previous chord) a shorter entrance than a slow one', () => {
+      const fastContainer = new FakeContainer();
+      const fastRenderer = new PixiRenderer(fastContainer, 1000, 1000, LOOKAHEAD_MS);
+      fastRenderer.showUpcoming(
+        [
+          { distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) },
+          { distanceMs: 50, notes: [62].map((midi) => ({ midi, velocity: 100 })) }, // fast trill gap
+        ],
+        'parliament',
+      );
+
+      const slowContainer = new FakeContainer();
+      const slowRenderer = new PixiRenderer(slowContainer, 1000, 1000, LOOKAHEAD_MS);
+      slowRenderer.showUpcoming(
+        [
+          { distanceMs: 0, notes: [60].map((midi) => ({ midi, velocity: 100 })) },
+          { distanceMs: 2000, notes: [62].map((midi) => ({ midi, velocity: 100 })) }, // slow, held-note gap
+        ],
+        'parliament',
+      );
+
+      // Same real elapsed time into both entrances: the fast one's duration clamps to the 80ms
+      // floor (50ms gap), so 100ms in it's already fully settled; the slow one's clamps to the
+      // 320ms ceiling (2000ms gap), so 100ms in it's still well into its transition.
+      fastRenderer.tick(100);
+      slowRenderer.tick(100);
+
+      const hitLineY = 1000 * 0.85;
+      const topY = 1000 * 0.15;
+      const fastRestY = hitLineY - (50 / LOOKAHEAD_MS) * (hitLineY - topY);
+      const slowRestY = topY; // distanceMs 2000 > LOOKAHEAD_MS, clamped to the very top of the lane
+
+      const fastDistanceFromRest = Math.abs(fastContainer.children[1]!.y - fastRestY);
+      const slowDistanceFromRest = Math.abs(slowContainer.children[1]!.y - slowRestY);
+      expect(fastDistanceFromRest).toBeLessThan(slowDistanceFromRest);
     });
   });
 });

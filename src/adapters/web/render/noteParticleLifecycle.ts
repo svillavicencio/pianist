@@ -33,6 +33,18 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
+/**
+ * Eases 0..1 with deceleration — fast at the start, settling gently at the end. Used for the
+ * upcoming-note "falling into place" entrance transition (a bounded, self-terminating animation
+ * distinct from `particleStateAt`'s linear hit-particle fade — see `PixiRenderer`'s entrance
+ * animation for why it must never continue past its own target). `t` is clamped to [0, 1] first,
+ * so calling this before the transition starts or after it's long finished is always safe.
+ */
+export function easeOutQuad(t: number): number {
+  const clamped = clamp(t, 0, 1);
+  return 1 - (1 - clamped) ** 2;
+}
+
 /** Radius scale factor at velocity 0 / the highest MIDI velocity (127) — a soft note renders
  *  smaller, a loud note bigger, around the unscaled base radius at the midpoint. Wide on purpose
  *  (roughly 3x smallest-to-largest): the original, narrower 0.7-1.3 range read as barely-there

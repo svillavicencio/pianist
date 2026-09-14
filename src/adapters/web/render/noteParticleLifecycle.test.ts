@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { contentPieces } from '../../../content/catalog';
-import { colorForNote, MAX_MIDI, MIN_MIDI, particleStateAt, radiusForVelocity, shiftLightness } from './noteParticleLifecycle';
+import { colorForNote, easeOutQuad, MAX_MIDI, MIN_MIDI, particleStateAt, radiusForVelocity, shiftLightness } from './noteParticleLifecycle';
 
 describe('particleStateAt', () => {
   it('starts small, fully opaque, and alive at t=0', () => {
@@ -138,5 +138,26 @@ describe('radiusForVelocity', () => {
     const softest = radiusForVelocity(20, 0);
     const loudest = radiusForVelocity(20, 127);
     expect(loudest / softest).toBeGreaterThan(2.5);
+  });
+});
+
+describe('easeOutQuad', () => {
+  it('starts at 0', () => {
+    expect(easeOutQuad(0)).toBe(0);
+  });
+
+  it('ends at 1', () => {
+    expect(easeOutQuad(1)).toBe(1);
+  });
+
+  it('moves faster in the first half than the second (decelerating, not linear or accelerating)', () => {
+    const firstHalfDelta = easeOutQuad(0.5) - easeOutQuad(0);
+    const secondHalfDelta = easeOutQuad(1) - easeOutQuad(0.5);
+    expect(firstHalfDelta).toBeGreaterThan(secondHalfDelta);
+  });
+
+  it('clamps out-of-range input instead of extrapolating', () => {
+    expect(easeOutQuad(-1)).toBe(0);
+    expect(easeOutQuad(2)).toBe(1);
   });
 });
