@@ -22,8 +22,11 @@ const UPCOMING_ALPHA = 0.55;
 /** Fraction of the viewport height the preview lane's top edge sits at; dots fall from here down to the hit line. */
 const UPCOMING_TOP_FRACTION = 0.15;
 
-/** How far (0..1, toward black) every other upcoming chord is darkened, so consecutive taps alternate shade. */
-const UPCOMING_ALT_SHADE_AMOUNT = 0.5;
+/** How far (-1..1, negative = darker, positive = lighter) every other upcoming chord's dots are
+ *  lightness-shifted from their pitch-based color, so consecutive taps alternate shade. Positive
+ *  (toward white) rather than the old toward-black shift — darkening further on an already-dark
+ *  background loses contrast instead of gaining it. */
+const UPCOMING_ALT_LIGHTNESS_SHIFT = 0.3;
 
 /** Width (px) of the line connecting a multi-note chord's dots — "these notes fire on the same tap". */
 const UPCOMING_CHORD_LINE_WIDTH_PX = 3;
@@ -44,7 +47,7 @@ interface TrackedParticle {
 interface TrackedUpcomingChord {
   readonly distanceMs: number;
   readonly xs: readonly number[];
-  readonly color: number;
+  readonly colors: readonly number[]; // one per dot, same order as `xs`/`dots`
   readonly dots: readonly PIXI.Graphics[];
   readonly line: PIXI.Graphics | undefined;
 }
@@ -115,32 +118,33 @@ export class PixiRenderer implements Renderer {
       }
     }
 
-    const baseColor = colorThemeToHex(colorTheme);
-    const altColor = darkenHex(baseColor, UPCOMING_ALT_SHADE_AMOUNT);
-
     this.upcomingElapsedMs =
       continuedFromPreviousTap && previousNextDistanceMs !== undefined
         ? this.upcomingElapsedMs - previousNextDistanceMs
         : 0;
     this.upcoming = chords.map((chord, index) => {
-      // Alternates shade per chord (not per note) — same shade + connecting line reads as "one
-      // chord, press together"; the next chord switching shade reads as "that's a separate tap".
-      const color = index % 2 === 0 ? baseColor : altColor;
+      // Odd chords (the "in-between" tap relative to the one before) get lightened, so
+      // consecutive taps read apart even when they share a pitch.
+      const isAlternate = index % 2 === 1;
       const xs = chord.midis.map((midi) => this.xForMidi(midi));
+      const colors = chord.midis.map((midi) => {
+        const base = colorForNote(colorTheme, midi);
+        return isAlternate ? shiftLightness(base, UPCOMING_ALT_LIGHTNESS_SHIFT) : base;
+      });
 
       const line = xs.length > 1 ? new PIXI.Graphics() : undefined;
       if (line) this.container.addChild(line);
 
-      const dots = xs.map((x) => {
+      const dots = xs.map((x, i) => {
         const dot = new PIXI.Graphics();
-        dot.circle(0, 0, UPCOMING_RADIUS_PX).fill(color);
+        dot.circle(0, 0, UPCOMING_RADIUS_PX).fill(colors[i]!);
         dot.alpha = UPCOMING_ALPHA;
         dot.x = x;
         this.container.addChild(dot);
         return dot;
       });
 
-      return { distanceMs: chord.distanceMs, xs, color, dots, line };
+      return { distanceMs: chord.distanceMs, xs, colors, dots, line };
     });
 
     this.positionUpcoming();
@@ -225,7 +229,7 @@ export class PixiRenderer implements Renderer {
         tracked.line
           .moveTo(Math.min(...tracked.xs), y)
           .lineTo(Math.max(...tracked.xs), y)
-          .stroke({ width: UPCOMING_CHORD_LINE_WIDTH_PX, color: tracked.color, alpha: UPCOMING_ALPHA });
+          .stroke({ width: UPCOMING_CHORD_LINE_WIDTH_PX, color: tracked.colors[0]!, alpha: UPCOMING_ALPHA });
       }
     }
   }

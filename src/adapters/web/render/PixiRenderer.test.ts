@@ -164,7 +164,7 @@ describe('PixiRenderer', () => {
     expect(container.children).toHaveLength(1);
   });
 
-  it('alternates shade between consecutive chords, so separate taps read apart from one another', () => {
+  it('shifts lightness on the alternate chord while keeping the same pitch-based hue', () => {
     const container = new FakeContainer();
     const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
     const fillSpy = vi.spyOn(PIXI.Graphics.prototype, 'fill');
@@ -172,8 +172,8 @@ describe('PixiRenderer', () => {
     renderer.showUpcoming(
       [
         { distanceMs: 0, midis: [60] },
-        { distanceMs: 300, midis: [62] },
-        { distanceMs: 600, midis: [64] },
+        { distanceMs: 300, midis: [60] }, // same pitch, next chord -> alternate parity
+        { distanceMs: 600, midis: [60] }, // same pitch, same parity as the first
       ],
       'parliament',
       false,
@@ -181,9 +181,20 @@ describe('PixiRenderer', () => {
 
     const colors = fillSpy.mock.calls.map((call) => call[0]);
     expect(colors).toHaveLength(3);
-    expect(colors[0]).toBe(colors[2]); // 1st and 3rd chord share the base shade
-    expect(colors[1]).not.toBe(colors[0]); // the chord in between uses the alternate shade
+    expect(colors[0]).toBe(colors[2]); // same pitch + same parity -> identical color
+    expect(colors[1]).not.toBe(colors[0]); // same pitch, alternate parity -> shifted lightness
+    fillSpy.mockRestore();
+  });
 
+  it('gives different pitches different colors even within the same chord', () => {
+    const container = new FakeContainer();
+    const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
+    const fillSpy = vi.spyOn(PIXI.Graphics.prototype, 'fill');
+
+    renderer.showUpcoming([{ distanceMs: 0, midis: [30, 100] }], 'parliament', false);
+
+    const colors = fillSpy.mock.calls.map((call) => call[0]);
+    expect(colors[0]).not.toBe(colors[1]);
     fillSpy.mockRestore();
   });
 
