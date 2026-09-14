@@ -2,42 +2,68 @@ import { describe, expect, it } from 'vitest';
 import { FakeInputSource } from './FakeInputSource';
 
 describe('FakeInputSource', () => {
-  it('notifies a registered listener when fire() is called', () => {
+  it('notifies a registered press listener with the pressed id', () => {
     const input = new FakeInputSource();
-    let calls = 0;
-    input.onTrigger(() => {
-      calls++;
-    });
+    const pressed: string[] = [];
+    input.onPress((id) => pressed.push(id));
 
-    input.fire();
-    expect(calls).toBe(1);
+    input.press('KeyA');
+    expect(pressed).toEqual(['KeyA']);
   });
 
-  it('notifies multiple listeners on a single fire()', () => {
+  it('notifies multiple press listeners on a single press()', () => {
     const input = new FakeInputSource();
-    let a = 0;
-    let b = 0;
-    input.onTrigger(() => {
-      a++;
-    });
-    input.onTrigger(() => {
-      b++;
-    });
+    const a: string[] = [];
+    const b: string[] = [];
+    input.onPress((id) => a.push(id));
+    input.onPress((id) => b.push(id));
 
-    input.fire();
-    expect(a).toBe(1);
-    expect(b).toBe(1);
+    input.press('KeyA');
+    expect(a).toEqual(['KeyA']);
+    expect(b).toEqual(['KeyA']);
   });
 
-  it('stops notifying a listener after it unsubscribes', () => {
+  it('stops notifying a press listener after it unsubscribes', () => {
     const input = new FakeInputSource();
     let calls = 0;
-    const unsubscribe = input.onTrigger(() => {
+    const unsubscribe = input.onPress(() => {
       calls++;
     });
 
     unsubscribe();
-    input.fire();
+    input.press('KeyA');
     expect(calls).toBe(0);
+  });
+
+  it('notifies a registered release listener with the released id', () => {
+    const input = new FakeInputSource();
+    const released: string[] = [];
+    input.onRelease((id) => released.push(id));
+
+    input.release('KeyA');
+    expect(released).toEqual(['KeyA']);
+  });
+
+  it('stops notifying a release listener after it unsubscribes', () => {
+    const input = new FakeInputSource();
+    let calls = 0;
+    const unsubscribe = input.onRelease(() => {
+      calls++;
+    });
+
+    unsubscribe();
+    input.release('KeyA');
+    expect(calls).toBe(0);
+  });
+
+  it('keeps press and release listeners independent', () => {
+    const input = new FakeInputSource();
+    let pressCalls = 0;
+    input.onPress(() => {
+      pressCalls++;
+    });
+
+    input.release('KeyA');
+    expect(pressCalls).toBe(0);
   });
 });

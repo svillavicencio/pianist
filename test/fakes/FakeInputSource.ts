@@ -1,20 +1,35 @@
-import type { InputSource, TriggerListener } from '../../src/ports/InputSource';
+import type { InputListener, InputSource } from '../../src/ports/InputSource';
 
-/** An `InputSource` double that lets a test fire triggers manually via `fire()`. */
+/** An `InputSource` double that lets a test simulate press/release manually. */
 export class FakeInputSource implements InputSource {
-  private listeners: TriggerListener[] = [];
+  private pressListeners: InputListener[] = [];
+  private releaseListeners: InputListener[] = [];
 
-  onTrigger(listener: TriggerListener): () => void {
-    this.listeners.push(listener);
+  onPress(listener: InputListener): () => void {
+    this.pressListeners.push(listener);
     return () => {
-      this.listeners = this.listeners.filter((registered) => registered !== listener);
+      this.pressListeners = this.pressListeners.filter((registered) => registered !== listener);
     };
   }
 
-  /** Simulate a user trigger — notifies every currently-registered listener. */
-  fire(): void {
-    for (const listener of this.listeners) {
-      listener();
+  onRelease(listener: InputListener): () => void {
+    this.releaseListeners.push(listener);
+    return () => {
+      this.releaseListeners = this.releaseListeners.filter((registered) => registered !== listener);
+    };
+  }
+
+  /** Simulate pressing `id` — notifies every currently-registered press listener. */
+  press(id: string): void {
+    for (const listener of this.pressListeners) {
+      listener(id);
+    }
+  }
+
+  /** Simulate releasing `id` — notifies every currently-registered release listener. */
+  release(id: string): void {
+    for (const listener of this.releaseListeners) {
+      listener(id);
     }
   }
 }

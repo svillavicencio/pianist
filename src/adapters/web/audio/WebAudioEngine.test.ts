@@ -148,34 +148,43 @@ describe('WebAudioEngine.noteOn', () => {
   });
 });
 
-describe('WebAudioEngine.noteOff', () => {
+describe('WebAudioEngine handle.release()', () => {
   it('ramps gain down and stops the tracked source', () => {
     const { context, engine } = buildEngine([60]);
     context.currentTime = 5;
 
-    engine.noteOn(60, 100);
+    const handle = engine.noteOn(60, 100);
     const source = context.createdSources[0]!;
     const gainNode = context.createdGains[0]!;
 
-    engine.noteOff(60);
+    handle.release();
 
     expect(gainNode.gain.linearRampToValueAtTimeCalls).toEqual([{ value: 0, time: 5.03 }]);
     expect(source.stopCalls).toEqual([5.03]);
   });
 
-  it('is a no-op when nothing is tracked for that midi', () => {
-    const { engine } = buildEngine([60]);
-    expect(() => engine.noteOff(60)).not.toThrow();
-  });
-
-  it('does not stop the source again on a second noteOff for the same midi', () => {
+  it('does not stop the source again on a second release() call', () => {
     const { context, engine } = buildEngine([60]);
-    engine.noteOn(60, 100);
+    const handle = engine.noteOn(60, 100);
     const source = context.createdSources[0]!;
 
-    engine.noteOff(60);
-    engine.noteOff(60);
+    handle.release();
+    handle.release();
 
     expect(source.stopCalls).toHaveLength(1);
+  });
+
+  it('is a no-op if the voice was already replaced by a retrigger of the same pitch', () => {
+    const { context, engine } = buildEngine([60]);
+
+    const firstHandle = engine.noteOn(60, 100);
+    const firstSource = context.createdSources[0]!;
+    engine.noteOn(60, 100); // retriggers — stops firstSource, starts a second voice
+    const secondSource = context.createdSources[1]!;
+
+    firstHandle.release();
+
+    expect(firstSource.stopCalls).toHaveLength(1); // only the retrigger's stop — release() added nothing
+    expect(secondSource.stopCalls).toEqual([]); // and definitely didn't touch the new voice
   });
 });
