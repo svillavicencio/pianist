@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { contentPieces } from '../../../content/catalog';
-import { colorForNote, MAX_MIDI, MIN_MIDI, particleStateAt, shiftLightness } from './noteParticleLifecycle';
+import { colorForNote, MAX_MIDI, MIN_MIDI, particleStateAt, radiusForVelocity, shiftLightness } from './noteParticleLifecycle';
 
 describe('particleStateAt', () => {
   it('starts small, fully opaque, and alive at t=0', () => {
@@ -113,5 +113,24 @@ describe('shiftLightness', () => {
   it('clamps an out-of-range amount instead of over/under-mixing', () => {
     expect(shiftLightness(0x123456, 2)).toBe(0xffffff);
     expect(shiftLightness(0x123456, -2)).toBe(0x000000);
+  });
+});
+
+describe('radiusForVelocity', () => {
+  it('scales toward the minimum at velocity 0', () => {
+    expect(radiusForVelocity(20, 0)).toBeCloseTo(20 * 0.7);
+  });
+
+  it('scales toward the maximum at the highest MIDI velocity (127)', () => {
+    expect(radiusForVelocity(20, 127)).toBeCloseTo(20 * 1.3);
+  });
+
+  it('is close to the unscaled base radius at the midpoint velocity', () => {
+    expect(radiusForVelocity(20, 63.5)).toBeCloseTo(20, 0);
+  });
+
+  it('clamps an out-of-range velocity instead of extrapolating', () => {
+    expect(radiusForVelocity(20, 200)).toBeCloseTo(20 * 1.3);
+    expect(radiusForVelocity(20, -10)).toBeCloseTo(20 * 0.7);
   });
 });

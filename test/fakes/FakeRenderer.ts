@@ -1,9 +1,10 @@
 import type { Renderer } from '../../src/ports/Renderer';
-import type { ColorTheme, MidiNote } from '../../src/domain/types';
+import type { ColorTheme, MidiNote, Velocity } from '../../src/domain/types';
 import type { UpcomingChordPreview } from '../../src/domain/upcomingNotesPreview';
 
 export interface RecordedNoteVisual {
   readonly midi: MidiNote;
+  readonly velocity: Velocity;
   readonly colorTheme: ColorTheme;
 }
 
@@ -21,8 +22,8 @@ export class FakeRenderer implements Renderer {
   lastUpcomingColorTheme: ColorTheme | undefined;
   lastUpcomingContinuedFromPreviousTap: boolean | undefined;
 
-  spawnNoteVisual(midi: MidiNote, colorTheme: ColorTheme): void {
-    this.spawnedVisuals.push({ midi, colorTheme });
+  spawnNoteVisual(midi: MidiNote, velocity: Velocity, colorTheme: ColorTheme): void {
+    this.spawnedVisuals.push({ midi, velocity, colorTheme });
   }
 
   showUpcoming(chords: readonly UpcomingChordPreview[], colorTheme: ColorTheme, continuedFromPreviousTap: boolean): void {

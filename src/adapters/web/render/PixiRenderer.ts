@@ -1,8 +1,8 @@
 import * as PIXI from 'pixi.js';
 import type { Renderer } from '../../../ports/Renderer';
-import type { ColorTheme, MidiNote } from '../../../domain/types';
+import type { ColorTheme, MidiNote, Velocity } from '../../../domain/types';
 import type { UpcomingChordPreview } from '../../../domain/upcomingNotesPreview';
-import { MAX_MIDI, MIN_MIDI, colorForNote, particleStateAt, shiftLightness } from './noteParticleLifecycle';
+import { MAX_MIDI, MIN_MIDI, colorForNote, particleStateAt, radiusForVelocity, shiftLightness } from './noteParticleLifecycle';
 import { SPAWN_HEIGHT_FRACTION } from './backdrop';
 
 /** How long (ms) a spawned note visual lives before it's removed; matches PARTICLE lifecycle tuning. */
@@ -88,9 +88,9 @@ export class PixiRenderer implements Renderer {
     private readonly lookaheadMs: number,
   ) {}
 
-  spawnNoteVisual(midi: MidiNote, colorTheme: ColorTheme): void {
+  spawnNoteVisual(midi: MidiNote, velocity: Velocity, colorTheme: ColorTheme): void {
     const graphic = new PIXI.Graphics();
-    graphic.circle(0, 0, BASE_RADIUS_PX).fill(colorForNote(colorTheme, midi));
+    graphic.circle(0, 0, radiusForVelocity(BASE_RADIUS_PX, velocity)).fill(colorForNote(colorTheme, midi));
     graphic.x = this.xForMidi(midi);
     graphic.y = this.height * SPAWN_HEIGHT_FRACTION;
     this.container.addChild(graphic);

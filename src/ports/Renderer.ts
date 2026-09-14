@@ -1,4 +1,4 @@
-import type { ColorTheme, MidiNote } from '../domain/types';
+import type { ColorTheme, MidiNote, Velocity } from '../domain/types';
 import type { UpcomingChordPreview } from '../domain/upcomingNotesPreview';
 
 /**
@@ -7,8 +7,9 @@ import type { UpcomingChordPreview } from '../domain/upcomingNotesPreview';
  * only describes WHAT happened (a note fired), never HOW to draw it.
  */
 export interface Renderer {
-  /** Spawn whatever visual represents a newly triggered note (e.g. a glowing circle). */
-  spawnNoteVisual(midi: MidiNote, colorTheme: ColorTheme): void;
+  /** Spawn whatever visual represents a newly triggered note (e.g. a glowing circle). `velocity`
+   *  scales how big it renders — a harder-struck note should read as visually louder. */
+  spawnNoteVisual(midi: MidiNote, velocity: Velocity, colorTheme: ColorTheme): void;
   /**
    * Replaces the "upcoming notes" preview lane with `chords`, touchpianist's falling-dots rhythm
    * cue. Chords stay grouped (not flattened) so an implementation can render "these notes are one

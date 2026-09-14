@@ -1,4 +1,4 @@
-import type { ColorTheme, MidiNote } from '../../../domain/types';
+import type { ColorTheme, MidiNote, Velocity } from '../../../domain/types';
 
 /** Scale a freshly spawned particle starts at (small, so the "pop" reads as growth). */
 const START_SCALE = 0.3;
@@ -31,6 +31,19 @@ export function particleStateAt(elapsedMs: number, totalLifetimeMs: number): Par
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
+}
+
+/** Radius scale factor at velocity 0 / the highest MIDI velocity (127) — a soft note renders
+ *  smaller, a loud note bigger, around the unscaled base radius at the midpoint. */
+const MIN_VELOCITY_SCALE = 0.7;
+const MAX_VELOCITY_SCALE = 1.3;
+const MAX_MIDI_VELOCITY = 127;
+
+/** Scales `baseRadius` by how hard a note was struck — louder notes render bigger. */
+export function radiusForVelocity(baseRadius: number, velocity: Velocity): number {
+  const t = clamp(velocity / MAX_MIDI_VELOCITY, 0, 1);
+  const scale = MIN_VELOCITY_SCALE + (MAX_VELOCITY_SCALE - MIN_VELOCITY_SCALE) * t;
+  return baseRadius * scale;
 }
 
 /** Lowest/highest MIDI notes on a standard 88-key piano — used to map a note to a horizontal position and a hue. */

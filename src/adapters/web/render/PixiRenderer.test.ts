@@ -31,8 +31,8 @@ describe('PixiRenderer', () => {
     const renderer = new PixiRenderer(container, 800, 600, LOOKAHEAD_MS);
     const fillSpy = vi.spyOn(PIXI.Graphics.prototype, 'fill');
 
-    renderer.spawnNoteVisual(30, 'ocean');
-    renderer.spawnNoteVisual(100, 'ocean');
+    renderer.spawnNoteVisual(30, 100, 'ocean');
+    renderer.spawnNoteVisual(100, 100, 'ocean');
 
     expect(fillSpy.mock.calls[0]?.[0]).not.toBe(fillSpy.mock.calls[1]?.[0]);
     fillSpy.mockRestore();
@@ -42,7 +42,7 @@ describe('PixiRenderer', () => {
     const container = new FakeContainer();
     const renderer = new PixiRenderer(container, 800, 600, LOOKAHEAD_MS);
 
-    renderer.spawnNoteVisual(60, 'parliament');
+    renderer.spawnNoteVisual(60, 100, 'parliament');
 
     expect(container.children).toHaveLength(1);
   });
@@ -51,8 +51,8 @@ describe('PixiRenderer', () => {
     const container = new FakeContainer();
     const renderer = new PixiRenderer(container, 1000, 500, LOOKAHEAD_MS);
 
-    renderer.spawnNoteVisual(21, 'parliament'); // lowest piano key -> left edge
-    renderer.spawnNoteVisual(108, 'parliament'); // highest piano key -> right edge
+    renderer.spawnNoteVisual(21, 100, 'parliament'); // lowest piano key -> left edge
+    renderer.spawnNoteVisual(108, 100, 'parliament'); // highest piano key -> right edge
 
     expect(container.children[0]?.x).toBeCloseTo(0);
     expect(container.children[1]?.x).toBeCloseTo(1000);
@@ -61,7 +61,7 @@ describe('PixiRenderer', () => {
   it('applies particleStateAt scale/alpha on tick and keeps a mid-lifetime particle alive', () => {
     const container = new FakeContainer();
     const renderer = new PixiRenderer(container, 800, 600, LOOKAHEAD_MS);
-    renderer.spawnNoteVisual(60, 'parliament');
+    renderer.spawnNoteVisual(60, 100, 'parliament');
 
     renderer.tick(400); // half of the 800ms particle lifetime
 
@@ -74,7 +74,7 @@ describe('PixiRenderer', () => {
   it('removes and destroys a particle once its lifetime elapses', () => {
     const container = new FakeContainer();
     const renderer = new PixiRenderer(container, 800, 600, LOOKAHEAD_MS);
-    renderer.spawnNoteVisual(60, 'parliament');
+    renderer.spawnNoteVisual(60, 100, 'parliament');
     const graphic = container.children[0];
     const destroySpy = vi.spyOn(graphic as PIXI.Graphics, 'destroy');
 
@@ -89,7 +89,7 @@ describe('PixiRenderer', () => {
     const renderer = new PixiRenderer(container, 800, 600, LOOKAHEAD_MS);
 
     renderer.resize(400, 300);
-    renderer.spawnNoteVisual(108, 'parliament'); // highest note -> full (new) width
+    renderer.spawnNoteVisual(108, 100, 'parliament'); // highest note -> full (new) width
 
     expect(container.children[0]?.x).toBeCloseTo(400);
   });
@@ -138,7 +138,7 @@ describe('PixiRenderer', () => {
     const container = new FakeContainer();
     const renderer = new PixiRenderer(container, 800, 600, LOOKAHEAD_MS);
 
-    renderer.spawnNoteVisual(60, 'parliament');
+    renderer.spawnNoteVisual(60, 100, 'parliament');
     renderer.showUpcoming([{ distanceMs: 0, midis: [64] }], 'parliament', false);
     renderer.showUpcoming([], 'parliament', false); // clearing the preview must not touch the hit particle
 
@@ -224,6 +224,20 @@ describe('PixiRenderer', () => {
     expect(strokeSpy).not.toHaveBeenCalled();
     fillSpy.mockRestore();
     strokeSpy.mockRestore();
+  });
+
+  it("scales a spawned hit particle's radius by its velocity", () => {
+    const container = new FakeContainer();
+    const renderer = new PixiRenderer(container, 800, 600, LOOKAHEAD_MS);
+    const circleSpy = vi.spyOn(PIXI.Graphics.prototype, 'circle');
+
+    renderer.spawnNoteVisual(60, 20, 'parliament'); // soft
+    renderer.spawnNoteVisual(60, 120, 'parliament'); // loud
+
+    const softRadius = circleSpy.mock.calls[0]?.[2];
+    const loudRadius = circleSpy.mock.calls[1]?.[2];
+    expect(loudRadius).toBeGreaterThan(softRadius as number);
+    circleSpy.mockRestore();
   });
 
   describe('strict timing (no artificial minimum spacing)', () => {

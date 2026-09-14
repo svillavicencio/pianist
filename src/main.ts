@@ -220,7 +220,7 @@ async function main(): Promise<void> {
       const notes = pieceEngine.trigger();
       for (const note of notes) {
         heldNotes.push(audioEngine.noteOn(note.midi, note.velocity));
-        renderer.spawnNoteVisual(note.midi, piece.colorTheme);
+        renderer.spawnNoteVisual(note.midi, note.velocity, piece.colorTheme);
       }
       activePresses.add(id);
       overlay.setProgress(pieceEngine.currentChordIndex, piece.chords.length);

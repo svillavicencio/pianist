@@ -4,12 +4,12 @@ import { FakeRenderer } from './FakeRenderer';
 describe('FakeRenderer', () => {
   it('records each spawned note visual in order', () => {
     const renderer = new FakeRenderer();
-    renderer.spawnNoteVisual(60, 'parliament');
-    renderer.spawnNoteVisual(64, 'parliament');
+    renderer.spawnNoteVisual(60, 100, 'parliament');
+    renderer.spawnNoteVisual(64, 100, 'parliament');
 
     expect(renderer.spawnedVisuals).toEqual([
-      { midi: 60, colorTheme: 'parliament' },
-      { midi: 64, colorTheme: 'parliament' },
+      { midi: 60, velocity: 100, colorTheme: 'parliament' },
+      { midi: 64, velocity: 100, colorTheme: 'parliament' },
     ]);
   });
 
