@@ -31,10 +31,6 @@ const UPCOMING_ALT_LIGHTNESS_SHIFT = 0.3;
  *  chord does in touchpianist/Piano-Flow, rather than as separate notes. */
 const CLUSTER_JITTER_STEP_PX = 8;
 
-/** Minimum hold duration (ms) before a tail is drawn at all — short/ordinary notes shouldn't
- *  grow a visible nub. */
-const HOLD_INDICATOR_MIN_MS = 180;
-
 /** One tracked particle: the PIXI display object plus how long it's been alive. */
 interface TrackedParticle {
   readonly graphic: PIXI.Graphics;
@@ -52,10 +48,7 @@ interface TrackedUpcomingChord {
   readonly distanceMs: number;
   readonly xs: readonly number[];
   readonly colors: readonly number[]; // one per dot, same order as `xs`/`dots`
-  readonly radii: readonly number[];
-  readonly holdDurationsMs: readonly (number | undefined)[];
   readonly dots: readonly PIXI.Graphics[];
-  readonly tails: readonly (PIXI.Graphics | undefined)[]; // one per note, undefined when below the hold threshold
 }
 
 /**
@@ -118,11 +111,6 @@ export class PixiRenderer implements Renderer {
         this.container.removeChild(dot);
         dot.destroy();
       }
-      for (const tail of tracked.tails) {
-        if (!tail) continue;
-        this.container.removeChild(tail);
-        tail.destroy();
-      }
     }
 
     this.upcomingElapsedMs =
@@ -150,22 +138,7 @@ export class PixiRenderer implements Renderer {
         return dot;
       });
 
-      const tails = chord.notes.map((note) => {
-        if (note.holdDurationMs === undefined || note.holdDurationMs < HOLD_INDICATOR_MIN_MS) return undefined;
-        const tail = new PIXI.Graphics();
-        this.container.addChild(tail);
-        return tail;
-      });
-
-      return {
-        distanceMs: chord.distanceMs,
-        xs,
-        colors,
-        radii,
-        holdDurationsMs: chord.notes.map((note) => note.holdDurationMs),
-        dots,
-        tails,
-      };
+      return { distanceMs: chord.distanceMs, xs, colors, dots };
     });
 
     this.positionUpcoming();
@@ -249,27 +222,10 @@ export class PixiRenderer implements Renderer {
    * ("this is how long you'd wait before the tap after next").
    */
   private positionUpcoming(): void {
-    const fallRangePx = this.height * (SPAWN_HEIGHT_FRACTION - UPCOMING_TOP_FRACTION);
-
     for (const tracked of this.upcoming) {
       const remainingMs = tracked.distanceMs - this.upcomingElapsedMs;
       const y = this.yForDistance(this.lookaheadMs > 0 ? remainingMs / this.lookaheadMs : 0);
-
-      for (let i = 0; i < tracked.dots.length; i++) {
-        const dot = tracked.dots[i]!;
-        dot.y = y;
-
-        const tail = tracked.tails[i];
-        const holdMs = tracked.holdDurationsMs[i];
-        if (!tail || holdMs === undefined) continue;
-
-        const tailPx = Math.min((holdMs / this.lookaheadMs) * fallRangePx, fallRangePx);
-        tail.clear();
-        tail
-          .moveTo(tracked.xs[i]!, y)
-          .lineTo(tracked.xs[i]!, y - tailPx)
-          .stroke({ width: tracked.radii[i]! * 2, color: tracked.colors[i]!, alpha: UPCOMING_ALPHA, cap: 'round' });
-      }
+      for (const dot of tracked.dots) dot.y = y;
     }
   }
 }

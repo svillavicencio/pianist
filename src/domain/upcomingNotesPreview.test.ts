@@ -91,23 +91,13 @@ describe('upcomingChordsPreview', () => {
     ]);
   });
 
-  it('carries velocity and holdDurationMs through per note', () => {
-    const chords: readonly Chord[] = [
-      { originalTimeMs: 0, screenDurationMs: 100, notes: [{ midi: 60, velocity: 80, holdDurationMs: 400 }] },
-    ];
-
-    const result = upcomingChordsPreview(chords, 1000);
-
-    expect(result[0]?.notes).toEqual([{ midi: 60, velocity: 80, holdDurationMs: 400 }]);
-  });
-
-  it('carries an undefined holdDurationMs through unchanged (not yet regenerated content)', () => {
+  it('carries velocity through per note', () => {
     const chords: readonly Chord[] = [
       { originalTimeMs: 0, screenDurationMs: 100, notes: [{ midi: 60, velocity: 80 }] },
     ];
 
     const result = upcomingChordsPreview(chords, 1000);
 
-    expect(result[0]?.notes[0]?.holdDurationMs).toBeUndefined();
+    expect(result[0]?.notes).toEqual([{ midi: 60, velocity: 80 }]);
   });
 });

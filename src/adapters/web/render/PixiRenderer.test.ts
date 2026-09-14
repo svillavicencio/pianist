@@ -279,66 +279,6 @@ describe('PixiRenderer', () => {
     });
   });
 
-  describe('hold indicator', () => {
-    it('draws a tail for a note whose holdDurationMs exceeds the minimum threshold', () => {
-      const container = new FakeContainer();
-      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
-
-      renderer.showUpcoming(
-        [{ distanceMs: 0, notes: [{ midi: 60, velocity: 100, holdDurationMs: 500 }] }],
-        'parliament',
-        false,
-      );
-
-      // 1 dot + 1 tail graphic.
-      expect(container.children).toHaveLength(2);
-    });
-
-    it('draws no tail for a note below the hold threshold', () => {
-      const container = new FakeContainer();
-      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
-
-      renderer.showUpcoming(
-        [{ distanceMs: 0, notes: [{ midi: 60, velocity: 100, holdDurationMs: 50 }] }],
-        'parliament',
-        false,
-      );
-
-      expect(container.children).toHaveLength(1); // dot only
-    });
-
-    it('draws no tail when holdDurationMs is undefined (content not yet regenerated)', () => {
-      const container = new FakeContainer();
-      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
-
-      renderer.showUpcoming([{ distanceMs: 0, notes: [{ midi: 60, velocity: 100 }] }], 'parliament', false);
-
-      expect(container.children).toHaveLength(1);
-    });
-
-    it('makes a longer hold render a longer tail', () => {
-      const shortContainer = new FakeContainer();
-      new PixiRenderer(shortContainer, 1000, 1000, LOOKAHEAD_MS).showUpcoming(
-        [{ distanceMs: 0, notes: [{ midi: 60, velocity: 100, holdDurationMs: 200 }] }],
-        'parliament',
-        false,
-      );
-      const longContainer = new FakeContainer();
-      new PixiRenderer(longContainer, 1000, 1000, LOOKAHEAD_MS).showUpcoming(
-        [{ distanceMs: 0, notes: [{ midi: 60, velocity: 100, holdDurationMs: 800 }] }],
-        'parliament',
-        false,
-      );
-
-      const shortTail = shortContainer.children[1] as PIXI.Graphics;
-      const longTail = longContainer.children[1] as PIXI.Graphics;
-      // Both tails moveTo the dot's y and lineTo (y - tailPx); a longer hold means a smaller
-      // (more negative-going) endpoint y, i.e. a visually longer tail extending further up.
-      expect(longTail).toBeDefined();
-      expect(shortTail).toBeDefined();
-    });
-  });
-
   describe('falling animation', () => {
     it('moves an upcoming dot smoothly toward the hit line as tick() advances real time', () => {
       const container = new FakeContainer();

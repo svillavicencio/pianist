@@ -84,7 +84,6 @@ for (let trackIndex = 0; trackIndex < trackCount; trackIndex++) {
         const velocity = u8();
         if (kind === 0x90 && velocity)
           events.push({ tick, type: "noteOn", note, velocity, channel });
-        else events.push({ tick, type: "noteOff", note, channel });
       } else if (kind === 0xa0 || kind === 0xb0 || kind === 0xe0) bytes(2);
       else if (kind === 0xc0 || kind === 0xd0) bytes(1);
       else throw new Error(`unknown MIDI status 0x${status.toString(16)}`);
@@ -177,51 +176,21 @@ function tickToMs(tick) {
   const segment = segments[low];
   return segment.startMs + (tick - segment.startTick) * segment.msPerTick;
 }
-const selectedEvents = tracks.flatMap((events, trackIndex) =>
-  events.filter(
-    (event) =>
-      SELECTED_TRACKS.includes(trackIndex) &&
-      SELECTED_CHANNELS.includes(event.channel),
-  ),
-);
-const openByKey = new Map();
-const holdDurationMsByNoteOn = new Map();
-for (const event of selectedEvents) {
-  const key = `${event.channel}:${event.note}`;
-  if (event.type === "noteOn") {
-    if (!openByKey.has(key)) openByKey.set(key, []);
-    openByKey.get(key).push(event);
-  } else if (event.type === "noteOff") {
-    const queue = openByKey.get(key);
-    const openEvent = queue?.shift();
-    if (openEvent)
-      holdDurationMsByNoteOn.set(
-        openEvent,
-        Math.round(tickToMs(event.tick) - tickToMs(openEvent.tick)),
-      );
-  }
-}
 const byTick = new Map();
 let collisions = 0;
 for (const event of selectedNoteOns) {
   if (!byTick.has(event.tick)) byTick.set(event.tick, new Map());
   const pitches = byTick.get(event.tick);
-  const holdDurationMs = holdDurationMsByNoteOn.get(event);
   if (pitches.has(event.note)) {
     collisions++;
-    pitches.set(event.note, {
-      velocity: Math.max(pitches.get(event.note).velocity, event.velocity),
-      holdDurationMs,
-    });
-  } else pitches.set(event.note, { velocity: event.velocity, holdDurationMs });
+    pitches.set(event.note, Math.max(pitches.get(event.note), event.velocity));
+  } else pitches.set(event.note, event.velocity);
 }
 const rawEvents = [...byTick.entries()]
   .sort(([a], [b]) => a - b)
   .map(([tick, pitches]) => [
     Math.round(tickToMs(tick)),
-    [...pitches.entries()]
-      .sort(([a], [b]) => a - b)
-      .map(([midi, { velocity, holdDurationMs }]) => [midi, velocity, holdDurationMs]),
+    [...pitches.entries()].sort(([a], [b]) => a - b),
   ]);
 const velocities = new Set(selectedNoteOns.map((event) => event.velocity));
 const maxSimultaneity = Math.max(...rawEvents.map(([, notes]) => notes.length));
@@ -230,14 +199,14 @@ if (
   collisions !== 0 ||
   velocities.size !== 52 ||
   maxSimultaneity !== 6 ||
-  JSON.stringify(rawEvents[0]) !== JSON.stringify([867, [[76, 36, 220]]]) ||
+  JSON.stringify(rawEvents[0]) !== JSON.stringify([867, [[76, 36]]]) ||
   JSON.stringify(rawEvents.at(-1)) !==
     JSON.stringify([
       164981,
       [
-        [33, 17, 614],
-        [45, 25, 614],
-        [69, 36, 614],
+        [33, 17],
+        [45, 25],
+        [69, 36],
       ],
     ])
 )
@@ -258,19 +227,17 @@ function formatRawEvents(events) {
   const lines = [
     "const RAW_EVENTS: readonly (readonly [",
     "  number,",
-    "  readonly (readonly [number, number, number | undefined])[],",
+    "  readonly (readonly [number, number])[],",
     "])[] = [",
   ];
   for (const [time, notes] of events) {
     if (notes.length === 1) {
-      lines.push(
-        `  [${time}, [[${notes[0][0]}, ${notes[0][1]}, ${notes[0][2] ?? "undefined"}]]],`,
-      );
+      lines.push(`  [${time}, [[${notes[0][0]}, ${notes[0][1]}]]],`);
       continue;
     }
     lines.push("  [", `    ${time},`, "    [");
-    for (const [midi, velocity, holdDurationMs] of notes)
-      lines.push(`      [${midi}, ${velocity}, ${holdDurationMs ?? "undefined"}],`);
+    for (const [midi, velocity] of notes)
+      lines.push(`      [${midi}, ${velocity}],`);
     lines.push("    ],", "  ],");
   }
   lines.push("];", "");
@@ -285,11 +252,7 @@ ${formatRawEvents(rawEvents)}const chords: readonly Chord[] = RAW_EVENTS.map(
     return {
       originalTimeMs,
       screenDurationMs: next ? next[0] - originalTimeMs : 0,
-      notes: notes.map(([midi, velocity, holdDurationMs]) => ({
-        midi,
-        velocity,
-        holdDurationMs,
-      })),
+      notes: notes.map(([midi, velocity]) => ({ midi, velocity })),
     };
   },
 );

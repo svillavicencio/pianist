@@ -87,7 +87,6 @@ for (let trackIndex = 0; trackIndex < trackCount; trackIndex++) {
         const velocity = u8();
         if (kind === 0x90 && velocity)
           events.push({ tick, type: "noteOn", note, velocity, channel });
-        else events.push({ tick, type: "noteOff", note, channel });
       } else if (kind === 0xa0 || kind === 0xb0 || kind === 0xe0) bytes(2);
       else if (kind === 0xc0 || kind === 0xd0) bytes(1);
       else throw new Error(`unknown MIDI status 0x${status.toString(16)}`);
@@ -142,34 +141,14 @@ if (
   throw new Error(
     `per-track profile mismatch: ${JSON.stringify(trackSummaries)}`,
   );
-function tickToMs(tick) {
-  return (tick * tempoEvents[0].usPerQuarter) / division / 1000;
-}
-const selectedEvents = tracks.flatMap((events, trackIndex) =>
+const noteOns = tracks.flatMap((events, trackIndex) =>
   events.filter(
     (event) =>
+      event.type === "noteOn" &&
       SELECTED_TRACKS.includes(trackIndex) &&
       SELECTED_CHANNELS.includes(event.channel),
   ),
 );
-const openByKey = new Map();
-const holdDurationMsByNoteOn = new Map();
-for (const event of selectedEvents) {
-  const key = `${event.channel}:${event.note}`;
-  if (event.type === "noteOn") {
-    if (!openByKey.has(key)) openByKey.set(key, []);
-    openByKey.get(key).push(event);
-  } else if (event.type === "noteOff") {
-    const queue = openByKey.get(key);
-    const openEvent = queue?.shift();
-    if (openEvent)
-      holdDurationMsByNoteOn.set(
-        openEvent,
-        Math.round(tickToMs(event.tick) - tickToMs(openEvent.tick)),
-      );
-  }
-}
-const noteOns = selectedEvents.filter((event) => event.type === "noteOn");
 if (noteOns.length !== 1465)
   throw new Error(`selected note count mismatch: ${noteOns.length}`);
 const byTick = new Map();
@@ -177,22 +156,16 @@ let collisions = 0;
 for (const event of noteOns) {
   if (!byTick.has(event.tick)) byTick.set(event.tick, new Map());
   const pitches = byTick.get(event.tick);
-  const holdDurationMs = holdDurationMsByNoteOn.get(event);
   if (pitches.has(event.note)) {
     collisions++;
-    pitches.set(event.note, {
-      velocity: Math.max(pitches.get(event.note).velocity, event.velocity),
-      holdDurationMs,
-    });
-  } else pitches.set(event.note, { velocity: event.velocity, holdDurationMs });
+    pitches.set(event.note, Math.max(pitches.get(event.note), event.velocity));
+  } else pitches.set(event.note, event.velocity);
 }
 const rawEvents = [...byTick.entries()]
   .sort(([a], [b]) => a - b)
   .map(([tick, pitches]) => [
-    Math.round(tickToMs(tick)),
-    [...pitches.entries()]
-      .sort(([a], [b]) => a - b)
-      .map(([midi, { velocity, holdDurationMs }]) => [midi, velocity, holdDurationMs]),
+    Math.round((tick * tempoEvents[0].usPerQuarter) / division / 1000),
+    [...pitches.entries()].sort(([a], [b]) => a - b),
   ]);
 const velocities = new Set(noteOns.map((event) => event.velocity));
 const maxSimultaneity = Math.max(...rawEvents.map(([, notes]) => notes.length));
@@ -201,8 +174,8 @@ if (
   collisions !== 0 ||
   velocities.size !== 44 ||
   maxSimultaneity !== 4 ||
-  JSON.stringify(rawEvents[0]) !== JSON.stringify([2087, [[68, 32, 310]]]) ||
-  JSON.stringify(rawEvents.at(-1)) !== JSON.stringify([105226, [[85, 52, 125]]])
+  JSON.stringify(rawEvents[0]) !== JSON.stringify([2087, [[68, 32]]]) ||
+  JSON.stringify(rawEvents.at(-1)) !== JSON.stringify([105226, [[85, 52]]])
 )
   throw new Error("derived source profile mismatch");
 for (const summary of trackSummaries)
@@ -221,23 +194,21 @@ function formatRawEvents(events) {
   const lines = [
     "const RAW_EVENTS: readonly (readonly [",
     "  number,",
-    "  readonly (readonly [number, number, number | undefined])[],",
+    "  readonly (readonly [number, number])[],",
     "])[] = [",
   ];
   for (const [time, notes] of events) {
     if (notes.length === 1) {
-      lines.push(
-        `  [${time}, [[${notes[0][0]}, ${notes[0][1]}, ${notes[0][2] ?? "undefined"}]]],`,
-      );
+      lines.push(`  [${time}, [[${notes[0][0]}, ${notes[0][1]}]]],`);
       continue;
     }
     lines.push("  [", `    ${time},`, "    [");
-    for (const [midi, velocity, holdDurationMs] of notes)
-      lines.push(`      [${midi}, ${velocity}, ${holdDurationMs ?? "undefined"}],`);
+    for (const [midi, velocity] of notes)
+      lines.push(`      [${midi}, ${velocity}],`);
     lines.push("    ],", "  ],");
   }
   lines.push("];", "");
   return lines.join("\n");
 }
-const generatedModule = `import type { Chord, Piece } from "../../domain/types";\n\n/** Frédéric Chopin: Minute Waltz Op. 64 No. 1, from Ignaz Friedman's Duo-Art piano-roll-derived performance MIDI published by Kunst der Fuge. The source is personal/non-commercial only and not redistributable. */\n${formatRawEvents(rawEvents)}const chords: readonly Chord[] = RAW_EVENTS.map(\n  ([originalTimeMs, notes], index) => {\n    const next = RAW_EVENTS[index + 1];\n    return {\n      originalTimeMs,\n      screenDurationMs: next ? next[0] - originalTimeMs : 0,\n      notes: notes.map(([midi, velocity, holdDurationMs]) => ({\n        midi,\n        velocity,\n        holdDurationMs,\n      })),\n    };\n  },\n);\n\nexport const chopinMinuteWaltzPiece: Piece = {\n  dataName: "chopin_minute_waltz_op64_no1",\n  displayName: "Minute Waltz Op. 64 No. 1",\n  colorTheme: "amethyst",\n  numScreens: chords.length,\n  chords,\n};\n`;
+const generatedModule = `import type { Chord, Piece } from "../../domain/types";\n\n/** Frédéric Chopin: Minute Waltz Op. 64 No. 1, from Ignaz Friedman's Duo-Art piano-roll-derived performance MIDI published by Kunst der Fuge. The source is personal/non-commercial only and not redistributable. */\n${formatRawEvents(rawEvents)}const chords: readonly Chord[] = RAW_EVENTS.map(\n  ([originalTimeMs, notes], index) => {\n    const next = RAW_EVENTS[index + 1];\n    return {\n      originalTimeMs,\n      screenDurationMs: next ? next[0] - originalTimeMs : 0,\n      notes: notes.map(([midi, velocity]) => ({ midi, velocity })),\n    };\n  },\n);\n\nexport const chopinMinuteWaltzPiece: Piece = {\n  dataName: "chopin_minute_waltz_op64_no1",\n  displayName: "Minute Waltz Op. 64 No. 1",\n  colorTheme: "amethyst",\n  numScreens: chords.length,\n  chords,\n};\n`;
 fs.writeFileSync(OUTPUT_PATH, generatedModule);

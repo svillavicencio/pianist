@@ -3,10 +3,6 @@ const fs = require("fs");
 const path = require("path");
 
 const filePath = path.resolve(__dirname, "../public/midi/chpn_op66.mid");
-const OUTPUT_PATH = path.resolve(
-  __dirname,
-  "../src/content/pieces/chopinFantaisieImpromptu.ts",
-);
 const buf = fs.readFileSync(filePath);
 const expectedSha256 =
   "4f88281bca1917af6519a842d216308646d67845212e296760764ba0cb3947af";
@@ -213,41 +209,15 @@ function buildTickToMs(tempoEvents, division) {
 
 const tickToMs = buildTickToMs(tempoEvents, division);
 
-// Merge note-on/note-off events from tracks 1 and 2, matching each noteOn with its noteOff
-// (FIFO per channel:note key) to compute how long the note was actually held.
-const selectedEvents = [];
+// Merge note-on events from tracks 1 and 2
+const allNoteOns = [];
 for (const tIdx of [1, 2]) {
   for (const ev of tracks[tIdx]) {
-    if (ev.type === "noteOn" || ev.type === "noteOff") selectedEvents.push(ev);
+    if (ev.type === "noteOn") {
+      allNoteOns.push({ tick: ev.tick, midi: ev.note, velocity: ev.velocity });
+    }
   }
 }
-const openByKey = new Map();
-const holdDurationMsByNoteOn = new Map();
-for (const event of selectedEvents) {
-  const key = `${event.channel}:${event.note}`;
-  if (event.type === "noteOn") {
-    if (!openByKey.has(key)) openByKey.set(key, []);
-    openByKey.get(key).push(event);
-  } else {
-    const queue = openByKey.get(key);
-    const openEvent = queue?.shift();
-    if (openEvent)
-      holdDurationMsByNoteOn.set(
-        openEvent,
-        Math.round(tickToMs(event.tick) - tickToMs(openEvent.tick)),
-      );
-  }
-}
-
-// Merge note-on events from tracks 1 and 2
-const allNoteOns = selectedEvents
-  .filter((ev) => ev.type === "noteOn")
-  .map((ev) => ({
-    tick: ev.tick,
-    midi: ev.note,
-    velocity: ev.velocity,
-    holdDurationMs: holdDurationMsByNoteOn.get(ev),
-  }));
 console.log("total note-on events tracks 1+2:", allNoteOns.length);
 
 // Group by exact tick
@@ -258,12 +228,9 @@ for (const n of allNoteOns) {
   const pitchMap = byTick.get(n.tick);
   if (pitchMap.has(n.midi)) {
     dedupCount++;
-    pitchMap.set(n.midi, {
-      velocity: Math.max(pitchMap.get(n.midi).velocity, n.velocity),
-      holdDurationMs: n.holdDurationMs,
-    });
+    pitchMap.set(n.midi, Math.max(pitchMap.get(n.midi), n.velocity));
   } else {
-    pitchMap.set(n.midi, { velocity: n.velocity, holdDurationMs: n.holdDurationMs });
+    pitchMap.set(n.midi, n.velocity);
   }
 }
 
@@ -275,7 +242,7 @@ const sortedTicks = Array.from(byTick.keys()).sort((a, b) => a - b);
 const chords = sortedTicks.map((tick) => {
   const pitchMap = byTick.get(tick);
   const notes = Array.from(pitchMap.entries())
-    .map(([midi, { velocity, holdDurationMs }]) => ({ midi, velocity, holdDurationMs }))
+    .map(([midi, velocity]) => ({ midi, velocity }))
     .sort((a, b) => a.midi - b.midi);
   return { tick, ms: Math.round(tickToMs(tick)), notes };
 });
@@ -364,60 +331,3 @@ console.log(
     2,
   ),
 );
-
-// Regenerate the checked-in piece module, now carrying real holdDurationMs per note.
-const rawEvents = chords.map((c) => [
-  c.ms,
-  c.notes.map((n) => [n.midi, n.velocity, n.holdDurationMs]),
-]);
-
-function formatRawEvents(events) {
-  const lines = [
-    "const RAW_EVENTS: readonly (readonly [",
-    "  number,",
-    "  readonly (readonly [number, number, number | undefined])[],",
-    "])[] = [",
-  ];
-  for (const [time, notes] of events) {
-    if (notes.length === 1) {
-      lines.push(
-        `  [${time}, [[${notes[0][0]}, ${notes[0][1]}, ${notes[0][2] ?? "undefined"}]]],`,
-      );
-      continue;
-    }
-    lines.push("  [", `    ${time},`, "    [");
-    for (const [midi, velocity, holdDurationMs] of notes)
-      lines.push(`      [${midi}, ${velocity}, ${holdDurationMs ?? "undefined"}],`);
-    lines.push("    ],", "  ],");
-  }
-  lines.push("];", "");
-  return lines.join("\n");
-}
-
-const generatedModule = `import type { Chord, Piece } from "../../domain/types";
-
-/** Chopin: Fantaisie-Impromptu in C-sharp minor, Op. 66, from Bernd Krueger's piano-midi.de performance MIDI, published under CC BY-SA 3.0 DE. */
-${formatRawEvents(rawEvents)}const chords: readonly Chord[] = RAW_EVENTS.map(
-  ([originalTimeMs, notes], index) => {
-    const next = RAW_EVENTS[index + 1];
-    return {
-      originalTimeMs,
-      screenDurationMs: next ? next[0] - originalTimeMs : 0,
-      notes: notes.map(([midi, velocity, holdDurationMs]) => ({
-        midi,
-        velocity,
-        holdDurationMs,
-      })),
-    };
-  },
-);
-
-export const chopinFantaisieImpromptuPiece: Piece = {
-  dataName: "chopin_fantaisie_impromptu",
-  displayName: "Fantaisie-Impromptu, Op. 66",
-  colorTheme: "amethyst",
-  numScreens: chords.length,
-  chords,
-};
-`;
-fs.writeFileSync(OUTPUT_PATH, generatedModule);

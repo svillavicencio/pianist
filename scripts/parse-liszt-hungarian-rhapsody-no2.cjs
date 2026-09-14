@@ -84,7 +84,6 @@ for (let trackIndex = 0; trackIndex < trackCount; trackIndex++) {
         const velocity = u8();
         if (kind === 0x90 && velocity)
           events.push({ tick, type: "noteOn", note, velocity, channel });
-        else events.push({ tick, type: "noteOff", note, channel });
       } else if (kind === 0xa0 || kind === 0xb0 || kind === 0xe0) bytes(2);
       else if (kind === 0xc0 || kind === 0xd0) bytes(1);
       else
@@ -131,14 +130,16 @@ for (const summary of trackSummaries) {
       `per-track profile mismatch: ${JSON.stringify(trackSummaries)}`,
     );
 }
-const selectedEvents = tracks.flatMap((events, trackIndex) =>
+const selected = tracks.flatMap((events, trackIndex) =>
   events.filter(
     (event) =>
       SELECTED_TRACKS.includes(trackIndex) &&
       SELECTED_CHANNELS.includes(event.channel) &&
-      (event.type === "noteOn" || event.type === "noteOff"),
+      event.type === "noteOn",
   ),
 );
+if (selected.length !== 6760)
+  throw new Error(`selected note count mismatch: ${selected.length}`);
 const segments = [];
 let tempo = 500000;
 let startTick = 0;
@@ -171,39 +172,15 @@ function tickToMs(tick) {
   const segment = segments[low];
   return segment.startMs + (tick - segment.startTick) * segment.msPerTick;
 }
-const openByKey = new Map();
-const holdDurationMsByNoteOn = new Map();
-for (const event of selectedEvents) {
-  const key = `${event.channel}:${event.note}`;
-  if (event.type === "noteOn") {
-    if (!openByKey.has(key)) openByKey.set(key, []);
-    openByKey.get(key).push(event);
-  } else {
-    const queue = openByKey.get(key);
-    const openEvent = queue?.shift();
-    if (openEvent)
-      holdDurationMsByNoteOn.set(
-        openEvent,
-        Math.round(tickToMs(event.tick) - tickToMs(openEvent.tick)),
-      );
-  }
-}
-const selected = selectedEvents.filter((event) => event.type === "noteOn");
-if (selected.length !== 6760)
-  throw new Error(`selected note count mismatch: ${selected.length}`);
 const byTick = new Map();
 let collisions = 0;
 for (const event of selected) {
   if (!byTick.has(event.tick)) byTick.set(event.tick, new Map());
   const pitches = byTick.get(event.tick);
-  const holdDurationMs = holdDurationMsByNoteOn.get(event);
   if (pitches.has(event.note)) {
     collisions++;
-    pitches.set(event.note, {
-      velocity: Math.max(pitches.get(event.note).velocity, event.velocity),
-      holdDurationMs,
-    });
-  } else pitches.set(event.note, { velocity: event.velocity, holdDurationMs });
+    pitches.set(event.note, Math.max(pitches.get(event.note), event.velocity));
+  } else pitches.set(event.note, event.velocity);
 }
 let lastTime = -1;
 const rawEvents = [...byTick.entries()]
@@ -211,12 +188,7 @@ const rawEvents = [...byTick.entries()]
   .map(([tick, pitches]) => {
     const time = Math.max(Math.round(tickToMs(tick)), lastTime + 1);
     lastTime = time;
-    return [
-      time,
-      [...pitches.entries()]
-        .sort(([a], [b]) => a - b)
-        .map(([midi, { velocity, holdDurationMs }]) => [midi, velocity, holdDurationMs]),
-    ];
+    return [time, [...pitches.entries()].sort(([a], [b]) => a - b)];
   });
 const velocities = new Set(selected.map((event) => event.velocity));
 const maxSimultaneity = Math.max(...rawEvents.map(([, notes]) => notes.length));
@@ -225,15 +197,15 @@ if (
   collisions !== 0 ||
   velocities.size !== 84 ||
   maxSimultaneity !== 8 ||
-  JSON.stringify(rawEvents[0]) !== JSON.stringify([1134, [[61, 77, 172]]]) ||
+  JSON.stringify(rawEvents[0]) !== JSON.stringify([1134, [[61, 77]]]) ||
   JSON.stringify(rawEvents.at(-1)) !==
     JSON.stringify([
       525750,
       [
-        [30, 74, 73],
-        [42, 88, 73],
-        [54, 91, 73],
-        [66, 107, 73],
+        [30, 74],
+        [42, 88],
+        [54, 91],
+        [66, 107],
       ],
     ])
 )
@@ -254,23 +226,21 @@ function formatRawEvents(events) {
   const lines = [
     "const RAW_EVENTS: readonly (readonly [",
     "  number,",
-    "  readonly (readonly [number, number, number | undefined])[],",
+    "  readonly (readonly [number, number])[],",
     "])[] = [",
   ];
   for (const [time, notes] of events) {
     if (notes.length === 1) {
-      lines.push(
-        `  [${time}, [[${notes[0][0]}, ${notes[0][1]}, ${notes[0][2] ?? "undefined"}]]],`,
-      );
+      lines.push(`  [${time}, [[${notes[0][0]}, ${notes[0][1]}]]],`);
       continue;
     }
     lines.push("  [", `    ${time},`, "    [");
-    for (const [midi, velocity, holdDurationMs] of notes)
-      lines.push(`      [${midi}, ${velocity}, ${holdDurationMs ?? "undefined"}],`);
+    for (const [midi, velocity] of notes)
+      lines.push(`      [${midi}, ${velocity}],`);
     lines.push("    ],", "  ],");
   }
   lines.push("];", "");
   return lines.join("\n");
 }
-const generatedModule = `import type { Chord, Piece } from "../../domain/types";\n\n/** Franz Liszt: Hungarian Rhapsody No. 2, S.244/2. Generated deterministically from Bernd Krueger's verified piano-midi.de performance MIDI by scripts/parse-liszt-hungarian-rhapsody-no2.cjs. */\n${formatRawEvents(rawEvents)}const chords: readonly Chord[] = RAW_EVENTS.map(\n  ([originalTimeMs, notes], index) => {\n    const next = RAW_EVENTS[index + 1];\n    return {\n      originalTimeMs,\n      screenDurationMs: next ? next[0] - originalTimeMs : 0,\n      notes: notes.map(([midi, velocity, holdDurationMs]) => ({ midi, velocity, holdDurationMs })),\n    };\n  },\n);\n\nexport const lisztHungarianRhapsodyNo2Piece: Piece = {\n  dataName: "liszt_hungarian_rhapsody_no2",\n  displayName: "Hungarian Rhapsody No. 2",\n  colorTheme: "silver",\n  numScreens: chords.length,\n  chords,\n};\n`;
+const generatedModule = `import type { Chord, Piece } from "../../domain/types";\n\n/** Franz Liszt: Hungarian Rhapsody No. 2, S.244/2. Generated deterministically from Bernd Krueger's verified piano-midi.de performance MIDI by scripts/parse-liszt-hungarian-rhapsody-no2.cjs. */\n${formatRawEvents(rawEvents)}const chords: readonly Chord[] = RAW_EVENTS.map(\n  ([originalTimeMs, notes], index) => {\n    const next = RAW_EVENTS[index + 1];\n    return {\n      originalTimeMs,\n      screenDurationMs: next ? next[0] - originalTimeMs : 0,\n      notes: notes.map(([midi, velocity]) => ({ midi, velocity })),\n    };\n  },\n);\n\nexport const lisztHungarianRhapsodyNo2Piece: Piece = {\n  dataName: "liszt_hungarian_rhapsody_no2",\n  displayName: "Hungarian Rhapsody No. 2",\n  colorTheme: "silver",\n  numScreens: chords.length,\n  chords,\n};\n`;
 fs.writeFileSync(OUTPUT_PATH, generatedModule);

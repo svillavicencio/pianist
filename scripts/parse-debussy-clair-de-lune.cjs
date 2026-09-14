@@ -89,7 +89,6 @@ for (let trackIndex = 0; trackIndex < trackCount; trackIndex++) {
         const velocity = u8();
         if (kind === 0x90 && velocity)
           events.push({ tick, type: "noteOn", note, velocity, channel });
-        else events.push({ tick, type: "noteOff", note, channel });
       } else if (kind === 0xa0 || kind === 0xb0 || kind === 0xe0) {
         u8();
         u8();
@@ -190,61 +189,32 @@ if (JSON.stringify(selectedTrackIndexes) !== JSON.stringify(SELECTED_TRACKS))
 const selectedTracks = tracks.filter((_, trackIndex) =>
   selectedTrackIndexes.includes(trackIndex),
 );
-const selectedEvents = selectedTracks.flatMap((track) =>
+const noteOns = selectedTracks.flatMap((track) =>
   track.filter(
     (event) =>
-      (event.type === "noteOn" || event.type === "noteOff") &&
-      SELECTED_CHANNELS.includes(event.channel),
+      event.type === "noteOn" && SELECTED_CHANNELS.includes(event.channel),
   ),
 );
 const selectedChannels = [
-  ...new Set(
-    selectedEvents
-      .filter((event) => event.type === "noteOn")
-      .map((event) => event.channel),
-  ),
+  ...new Set(noteOns.map((event) => event.channel)),
 ].sort((a, b) => a - b);
 if (JSON.stringify(selectedChannels) !== JSON.stringify(SELECTED_CHANNELS))
   throw new Error(`selected channel profile mismatch: ${selectedChannels}`);
-const openByKey = new Map();
-const holdDurationMsByNoteOn = new Map();
-for (const event of selectedEvents) {
-  const key = `${event.channel}:${event.note}`;
-  if (event.type === "noteOn") {
-    if (!openByKey.has(key)) openByKey.set(key, []);
-    openByKey.get(key).push(event);
-  } else {
-    const queue = openByKey.get(key);
-    const openEvent = queue?.shift();
-    if (openEvent)
-      holdDurationMsByNoteOn.set(
-        openEvent,
-        Math.round(tickToMs(event.tick) - tickToMs(openEvent.tick)),
-      );
-  }
-}
-const noteOns = selectedEvents.filter((event) => event.type === "noteOn");
 const byTick = new Map();
 let collisions = 0;
 for (const event of noteOns) {
   if (!byTick.has(event.tick)) byTick.set(event.tick, new Map());
   const pitches = byTick.get(event.tick);
-  const holdDurationMs = holdDurationMsByNoteOn.get(event);
   if (pitches.has(event.note)) {
     collisions++;
-    pitches.set(event.note, {
-      velocity: Math.max(pitches.get(event.note).velocity, event.velocity),
-      holdDurationMs,
-    });
-  } else pitches.set(event.note, { velocity: event.velocity, holdDurationMs });
+    pitches.set(event.note, Math.max(pitches.get(event.note), event.velocity));
+  } else pitches.set(event.note, event.velocity);
 }
 const rawEvents = [...byTick.entries()]
   .sort(([a], [b]) => a - b)
   .map(([tick, pitches]) => [
     Math.round(tickToMs(tick)),
-    [...pitches.entries()]
-      .sort(([a], [b]) => a - b)
-      .map(([midi, { velocity, holdDurationMs }]) => [midi, velocity, holdDurationMs]),
+    [...pitches.entries()].sort(([a], [b]) => a - b),
   ]);
 const sourceNoteOns = noteOns.length;
 const maxSimultaneous = Math.max(...rawEvents.map(([, notes]) => notes.length));
@@ -259,37 +229,34 @@ if (
     JSON.stringify([
       300,
       [
-        [65, 36, 4049],
-        [68, 43, 4049],
+        [65, 36],
+        [68, 43],
       ],
     ]) ||
-  JSON.stringify(rawEvents.at(-1)) !==
-    JSON.stringify([244040, [[92, 34, 3636]]])
+  JSON.stringify(rawEvents.at(-1)) !== JSON.stringify([244040, [[92, 34]]])
 )
   throw new Error("derived source profile mismatch");
 function formatRawEvents(events) {
   const lines = [
     "const RAW_EVENTS: readonly (readonly [",
     "  number,",
-    "  readonly (readonly [number, number, number | undefined])[],",
+    "  readonly (readonly [number, number])[],",
     "])[] = [",
   ];
   for (const [time, notes] of events) {
     if (notes.length === 1) {
-      lines.push(
-        `  [${time}, [[${notes[0][0]}, ${notes[0][1]}, ${notes[0][2] ?? "undefined"}]]],`,
-      );
+      lines.push(`  [${time}, [[${notes[0][0]}, ${notes[0][1]}]]],`);
       continue;
     }
     lines.push("  [", `    ${time},`, "    [");
-    for (const [midi, velocity, holdDurationMs] of notes)
-      lines.push(`      [${midi}, ${velocity}, ${holdDurationMs ?? "undefined"}],`);
+    for (const [midi, velocity] of notes)
+      lines.push(`      [${midi}, ${velocity}],`);
     lines.push("    ],", "  ],");
   }
   lines.push("];", "");
   return lines.join("\n");
 }
-const generatedModule = `import type { Chord, Piece } from "../../domain/types";\n\n/** Claude Debussy: Clair de lune from Suite bergamasque, L. 75. Generated from Bernd Krueger's piano-midi.de performance MIDI by scripts/parse-debussy-clair-de-lune.cjs. */\n${formatRawEvents(rawEvents)}\nconst chords: readonly Chord[] = RAW_EVENTS.map(\n  ([originalTimeMs, notes], index) => {\n    const next = RAW_EVENTS[index + 1];\n    return {\n      originalTimeMs,\n      screenDurationMs: next ? next[0] - originalTimeMs : 0,\n      notes: notes.map(([midi, velocity, holdDurationMs]) => ({ midi, velocity, holdDurationMs })),\n    };\n  },\n);\n\nexport const debussyClairDeLunePiece: Piece = {\n  dataName: "debussy_clair_de_lune",\n  displayName: "Clair de lune",\n  colorTheme: "midnight",\n  numScreens: chords.length,\n  chords,\n};\n`;
+const generatedModule = `import type { Chord, Piece } from "../../domain/types";\n\n/** Claude Debussy: Clair de lune from Suite bergamasque, L. 75. Generated from Bernd Krueger's piano-midi.de performance MIDI by scripts/parse-debussy-clair-de-lune.cjs. */\n${formatRawEvents(rawEvents)}\nconst chords: readonly Chord[] = RAW_EVENTS.map(\n  ([originalTimeMs, notes], index) => {\n    const next = RAW_EVENTS[index + 1];\n    return {\n      originalTimeMs,\n      screenDurationMs: next ? next[0] - originalTimeMs : 0,\n      notes: notes.map(([midi, velocity]) => ({ midi, velocity })),\n    };\n  },\n);\n\nexport const debussyClairDeLunePiece: Piece = {\n  dataName: "debussy_clair_de_lune",\n  displayName: "Clair de lune",\n  colorTheme: "midnight",\n  numScreens: chords.length,\n  chords,\n};\n`;
 fs.writeFileSync(outputPath, generatedModule);
 const summary = {
   format,

@@ -85,7 +85,6 @@ for (let trackIndex = 0; trackIndex < trackCount; trackIndex++) {
         const velocity = u8();
         if (type === 0x90 && velocity)
           events.push({ tick, type: "noteOn", note, velocity, channel });
-        else events.push({ tick, type: "noteOff", note, channel });
       } else if (type === 0xa0 || type === 0xb0 || type === 0xe0) bytes(2);
       else if (type === 0xc0 || type === 0xd0) bytes(1);
       else throw new Error(`unknown status ${status} in track ${trackIndex}`);
@@ -151,43 +150,20 @@ function tickToMs(tick) {
   const s = segments[lo];
   return s.startMs + (tick - s.startTick) * s.msPerTick;
 }
-const selectedEvents = selectedTracks.flatMap((trackIndex) => tracks[trackIndex]);
-const openByKey = new Map();
-const holdDurationMsByNoteOn = new Map();
-for (const event of selectedEvents) {
-  const key = `${event.channel}:${event.note}`;
-  if (event.type === "noteOn") {
-    if (!openByKey.has(key)) openByKey.set(key, []);
-    openByKey.get(key).push(event);
-  } else {
-    const queue = openByKey.get(key);
-    const openEvent = queue?.shift();
-    if (openEvent)
-      holdDurationMsByNoteOn.set(
-        openEvent,
-        Math.round(tickToMs(event.tick) - tickToMs(openEvent.tick)),
-      );
-  }
-}
-const selectedNoteOns = selectedEvents.filter((event) => event.type === "noteOn");
 const byTick = new Map();
-for (const event of selectedNoteOns) {
-  if (!byTick.has(event.tick)) byTick.set(event.tick, new Map());
-  const pitches = byTick.get(event.tick);
-  const holdDurationMs = holdDurationMsByNoteOn.get(event);
-  if (pitches.has(event.note))
-    pitches.set(event.note, {
-      velocity: Math.max(pitches.get(event.note).velocity, event.velocity),
-      holdDurationMs,
-    });
-  else pitches.set(event.note, { velocity: event.velocity, holdDurationMs });
-}
+for (const trackIndex of selectedTracks)
+  for (const event of tracks[trackIndex]) {
+    if (!byTick.has(event.tick)) byTick.set(event.tick, new Map());
+    const pitches = byTick.get(event.tick);
+    pitches.set(
+      event.note,
+      Math.max(pitches.get(event.note) || 0, event.velocity),
+    );
+  }
 const ticks = [...byTick.keys()].sort((a, b) => a - b);
 const raw = ticks.map((tick) => [
   Math.round(tickToMs(tick)),
-  [...byTick.get(tick).entries()]
-    .sort((a, b) => a[0] - b[0])
-    .map(([midi, { velocity, holdDurationMs }]) => [midi, velocity, holdDurationMs]),
+  [...byTick.get(tick).entries()].sort((a, b) => a[0] - b[0]),
 ]);
 const noteCount = raw.reduce((sum, [, notes]) => sum + notes.length, 0);
 const velocities = new Set(
@@ -209,23 +185,21 @@ function formatRawEvents(events) {
   const lines = [
     "const RAW_EVENTS: readonly (readonly [",
     "  number,",
-    "  readonly (readonly [number, number, number | undefined])[],",
+    "  readonly (readonly [number, number])[],",
     "])[] = [",
   ];
   for (const [time, notes] of events) {
     if (notes.length === 1) {
-      lines.push(
-        `  [${time}, [[${notes[0][0]}, ${notes[0][1]}, ${notes[0][2] ?? "undefined"}]]],`,
-      );
+      lines.push(`  [${time}, [[${notes[0][0]}, ${notes[0][1]}]]],`);
       continue;
     }
     lines.push("  [", `    ${time},`, "    [");
-    for (const [midi, velocity, holdDurationMs] of notes)
-      lines.push(`      [${midi}, ${velocity}, ${holdDurationMs ?? "undefined"}],`);
+    for (const [midi, velocity] of notes)
+      lines.push(`      [${midi}, ${velocity}],`);
     lines.push("    ],", "  ],");
   }
   lines.push("];", "");
   return lines.join("\n");
 }
-const output = `import type { Chord, Piece } from "../../domain/types";\n\n// Generated deterministically by scripts/parse-chopin-ballade-no1.cjs from the verified source MIDI.\n${formatRawEvents(raw)}\nconst chords: readonly Chord[] = RAW_EVENTS.map(\n  ([originalTimeMs, notes], index) => {\n    const next = RAW_EVENTS[index + 1];\n    return {\n      originalTimeMs,\n      screenDurationMs: next ? next[0] - originalTimeMs : 0,\n      notes: notes.map(([midi, velocity, holdDurationMs]) => ({ midi, velocity, holdDurationMs })),\n    };\n  },\n);\n\nexport const chopinBalladeNo1Piece: Piece = {\n  dataName: "chopin_ballade_no1_op23",\n  displayName: "Ballade No. 1 in G minor, Op. 23",\n  colorTheme: "amethyst",\n  numScreens: chords.length,\n  chords,\n};\n`;
+const output = `import type { Chord, Piece } from "../../domain/types";\n\n// Generated deterministically by scripts/parse-chopin-ballade-no1.cjs from the verified source MIDI.\n${formatRawEvents(raw)}\nconst chords: readonly Chord[] = RAW_EVENTS.map(\n  ([originalTimeMs, notes], index) => {\n    const next = RAW_EVENTS[index + 1];\n    return {\n      originalTimeMs,\n      screenDurationMs: next ? next[0] - originalTimeMs : 0,\n      notes: notes.map(([midi, velocity]) => ({ midi, velocity })),\n    };\n  },\n);\n\nexport const chopinBalladeNo1Piece: Piece = {\n  dataName: "chopin_ballade_no1_op23",\n  displayName: "Ballade No. 1 in G minor, Op. 23",\n  colorTheme: "amethyst",\n  numScreens: chords.length,\n  chords,\n};\n`;
 fs.writeFileSync(outputPath, output);

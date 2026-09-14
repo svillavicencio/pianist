@@ -5,7 +5,7 @@ export interface UpcomingChordPreview {
   /** Milliseconds from "next up" (0) until this chord is due, per the piece's authored rhythm. */
   readonly distanceMs: number;
   /** Every note that fires together on this chord's tap — 2+ means "press these together". */
-  readonly notes: readonly { readonly midi: MidiNote; readonly velocity: Velocity; readonly holdDurationMs?: number }[];
+  readonly notes: readonly { readonly midi: MidiNote; readonly velocity: Velocity }[];
 }
 
 /** Hard ceiling on notes returned, so a dense trill passage can never flood the preview lane. */
@@ -47,7 +47,6 @@ export function upcomingChordsPreview(
     const notes = chord.notes.slice(0, maxNotes - notesSoFar).map((note) => ({
       midi: note.midi,
       velocity: note.velocity,
-      holdDurationMs: note.holdDurationMs,
     }));
     result.push({ distanceMs: cumulativeMs, notes });
     notesSoFar += notes.length;
