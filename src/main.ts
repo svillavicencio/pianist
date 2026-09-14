@@ -4,6 +4,7 @@ import { WatchModePlayer } from './domain/WatchModePlayer';
 import { upcomingChordsPreview } from './domain/upcomingNotesPreview';
 import type { Chord, Piece } from './domain/types';
 import { WebAudioEngine } from './adapters/web/audio/WebAudioEngine';
+import type { NoteHandle } from './ports/AudioEngine';
 import { loadRealPianoSamples } from './adapters/web/audio/realPianoSamples';
 import { PixiRenderer } from './adapters/web/render/PixiRenderer';
 import { DomInputSource } from './adapters/web/input/DomInputSource';
@@ -182,23 +183,44 @@ async function main(): Promise<void> {
       renderer.showUpcoming(upcoming, piece.colorTheme, continuedFromPreviousTap);
     };
 
-    const unsubscribe = input.onTrigger(() => {
+    // Notes currently sounding because a press hasn't released yet, keyed by the press id
+    // (physical key code or `pointer:<id>`) that started them — see docs/plans/2026-09-14-key-hold-note-sustain-design.md.
+    const heldNotes = new Map<string, NoteHandle[]>();
+
+    function releaseAllHeldNotes(): void {
+      for (const handles of heldNotes.values()) {
+        for (const handle of handles) handle.release();
+      }
+      heldNotes.clear();
+    }
+
+    const unsubscribePress = input.onPress((id) => {
       if (paused) return;
       if (audioCtx.state === 'suspended') void audioCtx.resume();
 
       const notes = pieceEngine.trigger();
+      const handles: NoteHandle[] = [];
       for (const note of notes) {
-        audioEngine.noteOn(note.midi, note.velocity);
+        handles.push(audioEngine.noteOn(note.midi, note.velocity));
         renderer.spawnNoteVisual(note.midi, piece.colorTheme);
       }
+      heldNotes.set(id, handles);
       overlay.setProgress(pieceEngine.currentChordIndex, piece.chords.length);
       refreshUpcoming(true);
+    });
+
+    const unsubscribeRelease = input.onRelease((id) => {
+      const handles = heldNotes.get(id);
+      if (!handles) return;
+      for (const handle of handles) handle.release();
+      heldNotes.delete(id);
     });
 
     const overlay = renderGameOverlay(gameContainer, {
       onPause(): void {
         if (paused) return;
         paused = true;
+        releaseAllHeldNotes();
         pauseHandle = renderPauseMenu(gameContainer, {
           onResume(): void {
             pauseHandle?.destroy();
@@ -215,7 +237,8 @@ async function main(): Promise<void> {
           },
           onMainMenu(): void {
             pauseHandle?.destroy();
-            unsubscribe();
+            unsubscribePress();
+            unsubscribeRelease();
             input.destroy();
             overlay.destroy();
             showMainMenu();
