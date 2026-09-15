@@ -1,36 +1,14 @@
 import type { MidiNote } from '../../../domain/types';
+import { PIANO_MANIFEST, assetUrl } from './pianoAssetManifest';
+import { createProgressivePianoLoader, type PianoLoader } from './progressivePianoLoader';
+import { layerFor, selectAttack } from './sampleSelection';
 
-/** Pure MIDI-note-to-filename map for the recorded Salamander Grand Piano samples (see ATTRIBUTION.md). */
-export const REAL_PIANO_SAMPLE_FILES: ReadonlyMap<MidiNote, string> = new Map([
-  [36, 'C2v8.flac'],
-  [45, 'A2v8.flac'],
-  [48, 'C3v8.flac'],
-  [57, 'A3v8.flac'],
-  [60, 'C4v8.flac'],
-  [69, 'A4v8.flac'],
-  [72, 'C5v8.flac'],
-  [81, 'A5v8.flac'],
-]);
-
-/**
- * Fetches and decodes every real piano sample from `baseUrl`, keyed by MIDI note.
- * `fetchImpl` is injectable so this is testable without a real network/browser —
- * defaults to the global `fetch`. Any single fetch or decode failure rejects the
- * whole promise; this loader's only job is to try honestly, not to swallow errors.
- */
-export async function loadRealPianoSamples(
-  context: BaseAudioContext,
-  baseUrl: string,
-  fetchImpl: typeof fetch = fetch,
-): Promise<Map<MidiNote, AudioBuffer>> {
-  const entries = await Promise.all(
-    [...REAL_PIANO_SAMPLE_FILES.entries()].map(async ([midi, filename]) => {
-      const response = await fetchImpl(`${baseUrl}/${filename}`);
-      const arrayBuffer = await response.arrayBuffer();
-      const audioBuffer = await context.decodeAudioData(arrayBuffer);
-      return [midi, audioBuffer] as const;
-    }),
-  );
-
-  return new Map(entries);
-}
+export const REAL_PIANO_SAMPLE_FILES: ReadonlyMap<MidiNote,string> = new Map([[36,'C2v8.flac'],[45,'A2v8.flac'],[48,'C3v8.flac'],[57,'A3v8.flac'],[60,'C4v8.flac'],[69,'A4v8.flac'],[72,'C5v8.flac'],[81,'A5v8.flac']]);
+export function harmonicAssetFor(midi:MidiNote, velocity:number) { const candidates=PIANO_MANIFEST.assets.filter(a=>a.role==='harmonic'&&new RegExp('^harm(?:L|S|V3)(A|C|Ds|Fs)(\\d)$').test(a.id)); const pitch=(id:string)=>{const match=id.match(/^harm(?:L|S|V3)(A|C|Ds|Fs)(\d)$/); if(!match)return -1; const offsets:{[key:string]:number}={A:9,C:0,Ds:3,Fs:6}; const key=match[1]; if(!key)return -1; const offset=offsets[key]; return offset===undefined ? -1 : 12*(Number(match[2])+1)+offset;}; const matching=candidates.filter(a=>pitch(a.id)===midi).sort((a,b)=>a.id.localeCompare(b.id)); if(!matching.length) return undefined; return matching[layerFor(velocity)%matching.length]; }
+export interface PianoSampleProvider { getAttack(midi:MidiNote, velocity:number): { buffer:AudioBuffer; playbackRate:number; gain:number; assetId:string }|undefined; getRelease(midi:MidiNote):AudioBuffer|undefined; getHarmonic?(midi:MidiNote, velocity:number):AudioBuffer|undefined; loader:PianoLoader; prewarmBootstrap(priorityMidis?:readonly MidiNote[]):Promise<void>; prewarmPiece(midis:readonly MidiNote[]):Promise<void>; }
+/** Nearest layer-8 anchor asset id per distinct MIDI note, capped at eight concurrent priorities per the design's prewarm policy. */
+function priorityAnchorIds(midis:readonly MidiNote[]):string[] { const anchors=PIANO_MANIFEST.assets.filter(a=>a.role==='attack'&&a.layer===8); return [...new Set(midis)].map(m=>anchors.slice().sort((a,b)=>Math.abs((a.anchorMidi??0)-m)-Math.abs((b.anchorMidi??0)-m)||(a.anchorMidi??0)-(b.anchorMidi??0))[0]?.id).filter((id):id is string=>Boolean(id)).slice(0,8); }
+/** Harmonic asset id matching each priority MIDI note, so the harmonic hook can resolve on first play instead of only starting a background fetch. */
+function priorityHarmonicIds(midis:readonly MidiNote[]):string[] { return [...new Set(midis)].map(m=>harmonicAssetFor(m,100)?.id).filter((id):id is string=>Boolean(id)); }
+export function createPianoSampleProvider(context:BaseAudioContext, baseUrl:string, options:Parameters<typeof createProgressivePianoLoader>[2] = {}):PianoSampleProvider { const loader=createProgressivePianoLoader(context,PIANO_MANIFEST,{...options,baseUrl}); return { loader, prewarmBootstrap: (priorityMidis:readonly MidiNote[] = []) => { const bootstrapAssets=PIANO_MANIFEST.assets.filter(a => a.role === 'attack' && a.layer === 8); const priorityIds=priorityAnchorIds(priorityMidis); for(const id of priorityHarmonicIds(priorityMidis)) void loader.request(id).catch(()=>undefined); return loader.startPlan({ bootstrapIds: bootstrapAssets.map(a => a.id), seedIds: bootstrapAssets.slice(0, 8).map(a => a.id), priorityIds, visible: true, saveData: false }); }, prewarmPiece: (midis) => { for(const id of priorityHarmonicIds(midis)) void loader.request(id).catch(()=>undefined); return loader.prewarm(priorityAnchorIds(midis)); }, getAttack(midi,velocity){const selection=selectAttack({midi,velocity,available:PIANO_MANIFEST.assets.filter(a=>loader.get(a.id)),manifest:PIANO_MANIFEST}); if(!selection)return undefined; const buffer=loader.get(selection.assetId); return buffer ? {buffer,playbackRate:selection.playbackRate,gain:selection.residualGain,assetId:selection.assetId}:undefined;}, getRelease(midi){return loader.get(`rel${midi}`);}, getHarmonic(midi,velocity){const asset=harmonicAssetFor(midi,velocity); if(!asset) return undefined; const cached=loader.get(asset.id); if(!cached) void loader.request(asset.id).catch(()=>undefined); return cached;} }; }
+export async function loadRealPianoSamples(context:BaseAudioContext, baseUrl:string, fetchImpl:typeof fetch=fetch):Promise<Map<MidiNote,AudioBuffer>> { const result=new Map<MidiNote,AudioBuffer>(); for(const [midi,filename] of REAL_PIANO_SAMPLE_FILES){const response=await fetchImpl(assetUrl(`${baseUrl}/`,filename)); if(response.ok === false)throw new Error(`HTTP ${response.status}`); result.set(midi,await context.decodeAudioData(await response.arrayBuffer()));} return result; }

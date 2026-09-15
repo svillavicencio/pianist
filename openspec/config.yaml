@@ -1,0 +1,57 @@
+# OpenSpec project configuration for gordopianist.
+# Repository-facing artifacts are written in English.
+project:
+  name: gordopianist
+  description: TypeScript/Vite/Vitest browser piano practice app
+  architecture: hexagonal
+  deployment: GitHub Pages
+  base_path: /pianist/
+
+sdd:
+  artifact_store: openspec
+  strict_tdd: true
+  phase_rules:
+    init: >
+      Establish repository context without changing product behavior or history.
+    brainstorm: >
+      Clarify scope and preserve human-control gates for ambiguous or risky
+      decisions.
+    specify: >
+      Express behavior as testable requirements and scenarios before
+      implementation.
+    plan: >
+      Identify small reviewable work units and keep validation commands
+      explicit.
+    implement: >
+      Write tests first, then the minimum production change; do not bypass
+      licensing or manifest checks.
+    verify: >
+      Run the configured test, typecheck, and build commands; report failures
+      without masking them.
+    deliver: >
+      Ask before crossing authorization, security, destructive, publishing, or
+      review-budget gates.
+
+testing:
+  runner: npm test
+  commands:
+    test: npm test
+    typecheck: npm run typecheck
+    build: npm run build
+  strict_tdd: true
+
+constraints:
+  language: English
+  public_audio:
+    require_verified_redistributable_license: true
+    require_deterministic_manifests: true
+  implementation_target:
+    piano: Salamander Yamaha C5
+    velocity_layers: 16
+    loading: progressive
+
+paths:
+  specs: openspec/specs
+  changes: openspec/changes
+  archive: openspec/archive
+  context: openspec/project.md

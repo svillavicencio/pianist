@@ -1,202 +1,183 @@
-import { describe, expect, it } from 'vitest';
-import { WebAudioEngine } from './WebAudioEngine';
-import type { MidiNote } from '../../../domain/types';
-
-/**
- * Hand-rolled fakes for the tiny slice of the Web Audio API WebAudioEngine uses.
- * Each fake just records the calls made on it so tests can assert wiring —
- * no real audio graph, no jsdom, no third-party mocking library.
- */
-class FakeAudioParam {
-  value = 0;
-  readonly setValueAtTimeCalls: Array<{ value: number; time: number }> = [];
-  readonly linearRampToValueAtTimeCalls: Array<{ value: number; time: number }> = [];
-  readonly cancelScheduledValuesCalls: number[] = [];
-
-  setValueAtTime(value: number, time: number): FakeAudioParam {
-    this.value = value;
-    this.setValueAtTimeCalls.push({ value, time });
-    return this;
-  }
-
-  linearRampToValueAtTime(value: number, time: number): FakeAudioParam {
-    this.value = value;
-    this.linearRampToValueAtTimeCalls.push({ value, time });
-    return this;
-  }
-
-  cancelScheduledValues(time: number): FakeAudioParam {
-    this.cancelScheduledValuesCalls.push(time);
-    return this;
-  }
+import { describe, expect, it } from "vitest";
+import { WebAudioEngine } from "./WebAudioEngine";
+import { createPianoSampleProvider } from "./realPianoSamples";
+class Param {
+ value = 0;
+ ramps: any[] = [];
+ cancelScheduledValues() {}
+ setValueAtTime(v: number) {
+  this.value = v;
+  return this;
+ }
+ linearRampToValueAtTime(v: number, t: number) {
+  this.ramps.push([v, t]);
+  return this;
+ }
 }
-
-class FakeAudioBufferSourceNode {
-  buffer: unknown = null;
-  readonly playbackRate = new FakeAudioParam();
-  readonly connectedTo: unknown[] = [];
-  readonly startCalls: Array<number | undefined> = [];
-  readonly stopCalls: Array<number | undefined> = [];
-
-  connect(destination: unknown): unknown {
-    this.connectedTo.push(destination);
-    return destination;
-  }
-
-  start(when?: number): void {
-    this.startCalls.push(when);
-  }
-
-  stop(when?: number): void {
-    this.stopCalls.push(when);
-  }
+class Source {
+ buffer: any;
+ playbackRate = new Param();
+ connected: any[] = [];
+ starts = 0;
+ stops: any[] = [];
+ onended = () => {};
+ connect(x: any) {
+  this.connected.push(x);
+  return x;
+ }
+ start() {
+  this.starts++;
+ }
+ stop(t: number) {
+  this.stops.push(t);
+ }
 }
-
-class FakeGainNode {
-  readonly gain = new FakeAudioParam();
-  readonly connectedTo: unknown[] = [];
-
-  connect(destination: unknown): unknown {
-    this.connectedTo.push(destination);
-    return destination;
-  }
+class Gain {
+ gain = new Param();
+ connected: any[] = [];
+ connect(x: any) {
+  this.connected.push(x);
+  return x;
+ }
+ disconnect() {}
 }
-
-class FakeAudioContext {
-  currentTime = 0;
-  readonly destination = { marker: 'destination' };
-  readonly createdSources: FakeAudioBufferSourceNode[] = [];
-  readonly createdGains: FakeGainNode[] = [];
-
-  createBufferSource(): FakeAudioBufferSourceNode {
-    const source = new FakeAudioBufferSourceNode();
-    this.createdSources.push(source);
-    return source;
-  }
-
-  createGain(): FakeGainNode {
-    const gainNode = new FakeGainNode();
-    this.createdGains.push(gainNode);
-    return gainNode;
-  }
+class Compressor extends Gain {
+ threshold = new Param();
+ knee = new Param();
+ ratio = new Param();
+ attack = new Param();
+ release = new Param();
 }
-
-/** Builds a WebAudioEngine wired to a fresh FakeAudioContext, casting past the real Web Audio types. */
-function buildEngine(sampleMidis: readonly MidiNote[]) {
-  const context = new FakeAudioContext();
-  const samples = new Map(sampleMidis.map((midi) => [midi, { id: midi } as unknown as AudioBuffer]));
-  const engine = new WebAudioEngine(context as unknown as BaseAudioContext, samples);
-  return { context, samples, engine };
+class Context {
+ currentTime = 0;
+ destination = {};
+ sources: Source[] = [];
+ gains: Gain[] = [];
+ compressor = new Compressor();
+ createBufferSource() {
+  const x = new Source();
+  this.sources.push(x);
+  return x;
+ }
+ createGain() {
+  const x = new Gain();
+  this.gains.push(x);
+  return x;
+ }
+ createDynamicsCompressor() {
+  return this.compressor;
+ }
 }
-
-describe('WebAudioEngine.init', () => {
-  it('resolves once samples are already populated', async () => {
-    const { engine } = buildEngine([60]);
-    await expect(engine.init()).resolves.toBeUndefined();
-  });
-
-  it('rejects when no samples were provided', async () => {
-    const { engine } = buildEngine([]);
-    await expect(engine.init()).rejects.toThrow();
-  });
-});
-
-describe('WebAudioEngine.noteOn', () => {
-  it('wires bufferSource -> gainNode -> destination and starts playback', () => {
-    const { context, samples, engine } = buildEngine([60]);
-
-    engine.noteOn(60, 127);
-
-    const source = context.createdSources[0]!;
-    const gainNode = context.createdGains[0]!;
-
-    expect(source.buffer).toBe(samples.get(60));
-    expect(source.connectedTo).toEqual([gainNode]);
-    expect(gainNode.connectedTo).toEqual([context.destination]);
-    expect(source.startCalls).toEqual([undefined]);
-  });
-
-  it('sets playbackRate for the nearest available sample, not the exact target', () => {
-    const { context, engine } = buildEngine([60]);
-
-    engine.noteOn(72, 100); // an octave above the only sample
-
-    const source = context.createdSources[0]!;
-    expect(source.playbackRate.value).toBe(2);
-  });
-
-  it('sets gain from velocity', () => {
-    const { context, engine } = buildEngine([60]);
-
-    engine.noteOn(60, 0);
-    expect(context.createdGains[0]!.gain.value).toBe(0);
-
-    engine.noteOn(60, 127);
-    expect(context.createdGains[1]!.gain.value).toBe(1);
-  });
-
-  it('retriggers an already-sounding note by stopping the previous source first', () => {
-    const { context, engine } = buildEngine([60]);
-
-    engine.noteOn(60, 100);
-    const firstSource = context.createdSources[0]!;
-    expect(firstSource.stopCalls).toEqual([]);
-
-    engine.noteOn(60, 100);
-    expect(firstSource.stopCalls).toHaveLength(1);
-    expect(context.createdSources).toHaveLength(2);
-  });
-
-  it('cuts a retriggered note quickly, unlike the slower key-release fade', () => {
-    const { context, engine } = buildEngine([60]);
-    context.currentTime = 5;
-
-    engine.noteOn(60, 100);
-    const firstSource = context.createdSources[0]!;
-
-    engine.noteOn(60, 100); // retrigger — should stop the first source fast, not with the key-release fade
-
-    expect(firstSource.stopCalls).toEqual([5.03]);
-  });
-});
-
-describe('WebAudioEngine handle.release()', () => {
-  it('ramps gain down and stops the tracked source', () => {
-    const { context, engine } = buildEngine([60]);
-    context.currentTime = 5;
-
-    const handle = engine.noteOn(60, 100);
-    const source = context.createdSources[0]!;
-    const gainNode = context.createdGains[0]!;
-
-    handle.release();
-
-    expect(gainNode.gain.linearRampToValueAtTimeCalls).toEqual([{ value: 0, time: 5.9 }]);
-    expect(source.stopCalls).toEqual([5.9]);
-  });
-
-  it('does not stop the source again on a second release() call', () => {
-    const { context, engine } = buildEngine([60]);
-    const handle = engine.noteOn(60, 100);
-    const source = context.createdSources[0]!;
-
-    handle.release();
-    handle.release();
-
-    expect(source.stopCalls).toHaveLength(1);
-  });
-
-  it('is a no-op if the voice was already replaced by a retrigger of the same pitch', () => {
-    const { context, engine } = buildEngine([60]);
-
-    const firstHandle = engine.noteOn(60, 100);
-    const firstSource = context.createdSources[0]!;
-    engine.noteOn(60, 100); // retriggers — stops firstSource, starts a second voice
-    const secondSource = context.createdSources[1]!;
-
-    firstHandle.release();
-
-    expect(firstSource.stopCalls).toHaveLength(1); // only the retrigger's stop — release() added nothing
-    expect(secondSource.stopCalls).toEqual([]); // and definitely didn't touch the new voice
-  });
+function engine() {
+ const context = new Context();
+ const e = new WebAudioEngine(
+  context as unknown as BaseAudioContext,
+  new Map([[60, { id: 60 } as unknown as AudioBuffer]]),
+ );
+ return { context, e };
+}
+describe("WebAudioEngine", () => {
+ it("uses master headroom and compressor defaults", () => {
+  const { context, e } = engine();
+  e.noteOn(60, 127);
+  expect(context.gains[0]!.gain.value).toBe(0.7);
+  expect(context.compressor.threshold.value).toBe(-18);
+ });
+ it("keeps repeated same-pitch voices independent", () => {
+  const { context, e } = engine();
+  const first = e.noteOn(60, 100);
+  const second = e.noteOn(60, 100);
+  expect(context.sources).toHaveLength(2);
+  first.release();
+  expect(context.sources[0]!.stops).toHaveLength(1);
+  expect(context.sources[1]!.stops).toHaveLength(0);
+  second.release();
+  expect(context.sources[1]!.stops).toHaveLength(1);
+ });
+ it("routes key-specific release through provider with a 35ms attack fade", () => {
+  const { context } = engine();
+  const release = { id: "release" } as unknown as AudioBuffer;
+  const provider = {
+   loader: {} as any,
+   prewarmBootstrap: async () => {},
+   prewarmPiece: async () => {},
+   getAttack: () => ({
+    buffer: { id: "attack" } as unknown as AudioBuffer,
+    playbackRate: 1,
+    gain: 0.5,
+    assetId: "attack",
+   }),
+   getRelease: () => release,
+   getHarmonic: () => undefined,
+  };
+  const handle = new WebAudioEngine(
+   context as unknown as BaseAudioContext,
+   provider,
+  ).noteOn(60, 100);
+  handle.release();
+  expect(context.sources[1]!.buffer).toBe(release);
+  expect(context.sources[0]!.stops).toEqual([0.035]);
+ });
+ it("routes a verified harmonic buffer when the provider supplies one", () => {
+  const { context } = engine();
+  const provider = {
+   loader: {} as any,
+   prewarmBootstrap: async () => {},
+   prewarmPiece: async () => {},
+   getAttack: () => ({
+    buffer: { id: "attack" } as unknown as AudioBuffer,
+    playbackRate: 1,
+    gain: 0.5,
+    assetId: "attack",
+   }),
+   getRelease: () => undefined,
+   getHarmonic: () => ({ id: "harmonic" }) as unknown as AudioBuffer,
+  };
+  new WebAudioEngine(context as unknown as BaseAudioContext, provider).noteOn(
+   60,
+   100,
+  );
+  expect(context.sources).toHaveLength(2);
+  expect(context.sources[1]!.buffer).toEqual({ id: "harmonic" });
+ });
+ it("steals releasing voices before active voices", () => {
+  const { e } = engine();
+  const first = e.noteOn(60, 100);
+  for (let i = 1; i < 64; i++) e.noteOn(60, 100);
+  first.release();
+  e.noteOn(60, 100);
+  expect(e.diagnostics().activeVoices).toBeLessThanOrEqual(64);
+  expect(e.diagnostics().lastVoiceSteal?.reason).toBe("releasing-first");
+ });
+ it("caps active voices deterministically", () => {
+  const { e } = engine();
+  for (let i = 0; i < 65; i++) e.noteOn(60, 100);
+  expect(e.diagnostics().maxVoices).toBe(64);
+  expect(e.diagnostics().activeVoices).toBeLessThanOrEqual(64);
+  expect(e.diagnostics().voiceSteals).toBe(1);
+  expect(e.diagnostics().lastVoiceSteal?.reason).toBe("oldest-active");
+ });
+ it("enforces the 64-voice bound end-to-end through the real manifest provider across distinct pitches", async () => {
+  const context = new Context();
+  const provider = createPianoSampleProvider(
+   context as unknown as BaseAudioContext,
+   "/pianist/",
+   {
+    fetchImpl: async () =>
+     ({ ok: true, arrayBuffer: async () => new ArrayBuffer(1) }) as unknown as Response,
+    decode: async () => ({ length: 1, numberOfChannels: 1 }) as AudioBuffer,
+   },
+  );
+  await provider.prewarmBootstrap();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  // The eight bootstrap seed anchors are always decoded after
+  // prewarmBootstrap; cycling across them exercises real cross-pitch
+  // selection while keeping every note-on resolvable.
+  const seedMidis = [21, 24, 27, 30, 33, 36, 39, 42];
+  const e = new WebAudioEngine(context as unknown as BaseAudioContext, provider);
+  for (let i = 0; i < 88; i++) e.noteOn(seedMidis[i % seedMidis.length]!, 100);
+  expect(e.diagnostics().activeVoices).toBeLessThanOrEqual(64);
+  expect(e.diagnostics().activeVoices).toBe(64);
+  expect(e.diagnostics().voiceSteals).toBe(88 - 64);
+ });
 });
