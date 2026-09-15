@@ -484,6 +484,27 @@ describe('PixiRenderer', () => {
       const slowDistanceFromRest = Math.abs(slowContainer.children[1]!.y - slowRestY);
       expect(fastDistanceFromRest).toBeLessThan(slowDistanceFromRest);
     });
+
+    it('gives a brand-new chord the exact same px/ms fall speed as a carried-over glide (fixes "off-screen notes accelerate aggressively")', () => {
+      const container = new FakeContainer();
+      const renderer = new PixiRenderer(container, 1000, 1000, LOOKAHEAD_MS);
+      // 300ms gap x2.5 slowdown = 750ms duration — safely inside the unclamped 200-900ms range,
+      // so its rise distance isn't itself pinned to a floor/ceiling.
+      renderer.showUpcoming([{ distanceMs: 300, notes: [60].map((midi) => ({ midi, velocity: 100 })) }], 'parliament', FRESH);
+
+      const hitLineY = 1000 * 0.85;
+      const topY = 1000 * 0.15;
+      const laneHeight = hitLineY - topY;
+      const toY = hitLineY - (300 / LOOKAHEAD_MS) * laneHeight;
+      const durationMs = 300 * 2.5;
+      // The rate a carried-over chord's glide settles into (see PixiRenderer's `fallSpeedPxPerMs`)
+      // — previously a brand-new chord used its own unrelated 18-110px range instead, so the two
+      // kinds of motion visibly moved at different speeds side by side.
+      const expectedSpeedPxPerMs = laneHeight / (LOOKAHEAD_MS * 2.5);
+
+      const actualRisePx = toY - container.children[0]!.y;
+      expect(actualRisePx / durationMs).toBeCloseTo(expectedSpeedPxPerMs);
+    });
   });
 
   describe('continuity across a tap (advancedByTap) — this is the "jumps instead of flowing" fix', () => {
@@ -551,11 +572,11 @@ describe('PixiRenderer', () => {
 
       const hitLineY = 1000 * 0.85;
       const topY = 1000 * 0.15;
-      const toY = hitLineY - (250 / LOOKAHEAD_MS) * (hitLineY - topY);
+      const laneHeight = hitLineY - topY;
+      const toY = hitLineY - (250 / LOOKAHEAD_MS) * laneHeight;
       const durationMs = Math.min(900, Math.max(200, (250 - 0) * 2.5));
-      const durationFraction = (durationMs - 200) / (900 - 200);
-      const risePx = 18 + (110 - 18) * durationFraction;
-      const expectedFreshFromY = toY - risePx;
+      const fallSpeedPxPerMs = laneHeight / (LOOKAHEAD_MS * 2.5); // matches PixiRenderer's fallSpeedPxPerMs()
+      const expectedFreshFromY = toY - fallSpeedPxPerMs * durationMs;
 
       expect(container.children[0]!.y).toBeCloseTo(expectedFreshFromY);
       expect(container.children[0]!.y).not.toBeCloseTo(secondDotYBeforeReset, 0);

@@ -55,13 +55,6 @@ const TRANSITION_MAX_MS = 900;
  *  constant. */
 const TRANSITION_SLOWDOWN_FACTOR = 2.5;
 
-/** Bounds (px) for how far above its resting position a *brand-new* dot starts its transition —
- *  scaled by the same fast/slow gap the duration uses, so a slow entrance isn't just longer but
- *  visibly travels further too. A dot that was already on screen instead starts exactly where it
- *  already was (see `showUpcoming`) — these bounds only apply to a genuinely new arrival. */
-const NEW_CHORD_MIN_RISE_PX = 18;
-const NEW_CHORD_MAX_RISE_PX = 110;
-
 /** One tracked particle: the PIXI display object plus how long it's been alive. */
 interface TrackedParticle {
   readonly graphic: PIXI.Graphics;
@@ -197,12 +190,11 @@ export class PixiRenderer implements Renderer {
           TRANSITION_MAX_MS,
           Math.max(TRANSITION_MIN_MS, (chord.distanceMs - previousDistanceMs) * TRANSITION_SLOWDOWN_FACTOR),
         );
-        // How far into the duration's own range this chord sits (0 at the fastest bound, 1 at the
-        // slowest) — reused to scale the rise distance the same way, so a slow entrance isn't just
-        // longer, it visibly travels further too.
-        const durationFraction = (durationMs - TRANSITION_MIN_MS) / (TRANSITION_MAX_MS - TRANSITION_MIN_MS);
-        const risePx = NEW_CHORD_MIN_RISE_PX + (NEW_CHORD_MAX_RISE_PX - NEW_CHORD_MIN_RISE_PX) * durationFraction;
-        fromY = toY - risePx;
+        // Rise distance is derived from the exact same px/ms rate a carried-over chord's glide
+        // moves at (see `fallSpeedPxPerMs`), not an independently-tuned range — a brand-new chord
+        // popping into view must travel at the same visual speed as one that was already on
+        // screen, or the two kinds of motion read as two different speeds side by side.
+        fromY = toY - this.fallSpeedPxPerMs() * durationMs;
       }
 
       const dots = xs.map((x, i) => {
@@ -286,6 +278,20 @@ export class PixiRenderer implements Renderer {
     const topY = this.height * UPCOMING_TOP_FRACTION;
     const clampedDistance = Math.min(Math.max(distance, 0), 1);
     return hitLineY - clampedDistance * (hitLineY - topY);
+  }
+
+  /** The single px/ms rate every glide in this class moves at, away from the duration bounds'
+   *  clamped extremes: it's exactly the rate a carried-over chord's glide works out to when its
+   *  raw duration (real elapsed ms x `TRANSITION_SLOWDOWN_FACTOR`) lands inside
+   *  [`TRANSITION_MIN_MS`, `TRANSITION_MAX_MS`] — because `yForDistance` is linear in `distanceMs`
+   *  and duration is linear in the same elapsed ms, the ratio between them collapses to this one
+   *  constant, independent of how much time actually elapsed. Reusing it for a brand-new chord's
+   *  rise distance (`risePx = fallSpeedPxPerMs() * durationMs`) is what makes a note popping into
+   *  view for the first time travel at the *same* visual speed as one already being continued,
+   *  instead of its own independently-tuned (and mismatched) rise range. */
+  private fallSpeedPxPerMs(): number {
+    const laneHeightPx = this.height * (SPAWN_HEIGHT_FRACTION - UPCOMING_TOP_FRACTION);
+    return laneHeightPx / (this.lookaheadMs * TRANSITION_SLOWDOWN_FACTOR);
   }
 
   /** Sets every dot in `tracked` to its current transition frame: eased from `fromY` (at
